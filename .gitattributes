@@ -1,0 +1,3 @@
+# Keep launch scripts usable on their native platforms.
+start.command text eol=lf
+start.bat text eol=crlf

@@ -27,6 +27,12 @@ from .config import (
 from .control import ControlChannel
 from .errors import UserError
 from .metrics import ProgressTracker
+from .naming import (
+    DestinationPlan,
+    NamingError,
+    plan_destinations,
+    windows_long_path_warnings,
+)
 from .netutil import configure_socket
 from .protocol import (
     DATA_HEADER,
@@ -58,11 +64,23 @@ class RemoteFile:
     size: int
     mtime_ns: int
     quick_hash: str
+    mode: int | None = None
+    dest_rel_path: str | None = None
+
+    @property
+    def destination_rel(self) -> str:
+        return self.dest_rel_path or self.rel_path
+
+    @property
+    def renamed(self) -> bool:
+        return self.destination_rel != self.rel_path
 
     def public(self) -> dict[str, object]:
         return {
             "id": self.id,
             "rel": self.rel_path,
+            "dest_rel": self.destination_rel,
+            "renamed": self.renamed,
             "size": self.size,
         }
 
@@ -137,7 +155,7 @@ def scan_resume(root: Path, files: list[RemoteFile]) -> ResumeMatch:
             continue
         status = record.get("status")
         if status == "done":
-            destination = root.joinpath(*entry.rel_path.split("/"))
+            destination = root.joinpath(*entry.destination_rel.split("/"))
             try:
                 if destination.is_file() and destination.stat().st_size == entry.size:
                     offsets[entry.id] = entry.size
@@ -188,8 +206,10 @@ class ReceiveFileWriter:
         self.lock = threading.RLock()
         self.finalized = False
         self.state_written = False
-        parts = entry.rel_path.split("/")
+        parts = entry.destination_rel.split("/")
         self.destination = root.joinpath(*parts)
+        if not self.destination.is_relative_to(root):
+            raise ProtocolError("目标路径越界")
         self.part_path = _part_path(root, entry.id)
         self.state_path = _state_path(root, entry.id)
 
@@ -303,6 +323,7 @@ class ReceiveFileWriter:
                 raise OSError(f"仍有乱序数据未写入: {self.entry.rel_path}")
             if self.done_existing:
                 if self.destination.is_file() and self.destination.stat().st_size == self.entry.size:
+                    self._apply_mode()
                     self.finalized = True
                     return True
                 raise OSError(f"已标记完成的文件不存在: {self.entry.rel_path}")
@@ -337,6 +358,7 @@ class ReceiveFileWriter:
                 os.utime(self.destination, ns=(self.entry.mtime_ns, self.entry.mtime_ns))
             except OSError:
                 pass
+            self._apply_mode()
             try:
                 self._write_state("done")
             except OSError:
@@ -345,6 +367,14 @@ class ReceiveFileWriter:
                 pass
             self.finalized = True
             return False
+
+    def _apply_mode(self) -> None:
+        if self.entry.mode is None or os.name == "nt":
+            return
+        try:
+            os.chmod(self.destination, self.entry.mode & 0o777)
+        except OSError as exc:
+            log.debug("无法恢复文件权限 %s: %s", self.entry.rel_path, exc)
 
 
 class ReceiveTransfer:
@@ -480,6 +510,8 @@ class ReceiveService:
         self._save_dir: Path | None = None
         self._free_space: int | None = None
         self._resume = ResumeMatch(offsets={}, done_ids=set())
+        self._path_adaptation: dict[str, Any] = {"renamed": 0, "examples": [], "warnings": []}
+        self._path_warnings: list[str] = []
         self._proposed_offsets: dict[str, int] = {}
         self._done_ids: set[str] = set()
         self._completed_payload: dict[str, Any] | None = None
@@ -532,6 +564,8 @@ class ReceiveService:
             self._completed_payload = None
             self._resume = ResumeMatch(offsets={}, done_ids=set())
             self._free_space = None
+            self._path_adaptation = {"renamed": 0, "examples": [], "warnings": []}
+            self._path_warnings = []
             self._progress = ProgressTracker()
             self._connect_thread = threading.Thread(
                 target=self._connect_worker,
@@ -594,6 +628,8 @@ class ReceiveService:
             self._resume = ResumeMatch(offsets={}, done_ids=set())
             self._proposed_offsets = {}
             self._done_ids = set()
+            self._path_adaptation = {"renamed": 0, "examples": [], "warnings": []}
+            self._path_warnings = []
             self._completed_payload = None
             self._progress = ProgressTracker()
             self._data_setup_started = False
@@ -622,12 +658,18 @@ class ReceiveService:
         with self._dir_lock:
             resume = scan_resume(root, manifest)
             free = int(shutil.disk_usage(root).free)
+            path_warnings = (
+                windows_long_path_warnings(root, [item.destination_rel for item in manifest])
+                if os.name == "nt"
+                else []
+            )
             with self.lock:
                 if self.status != "review":
                     raise UserError("接收状态已变化，请重试")
                 self._save_dir = root
                 self._free_space = free
                 self._resume = resume
+                self._path_warnings = path_warnings
                 self.error = None
                 self.notice = "保存位置已确认"
                 return self._resume_dict_locked()
@@ -698,6 +740,13 @@ class ReceiveService:
                 self._data_ports = parsed["data_ports"]
                 self._chunk_size = parsed["chunk_size"]
                 self.manifest = parsed["files"]
+                path_plan: DestinationPlan = parsed["path_plan"]
+                self._path_adaptation = {
+                    "renamed": path_plan.renamed_count,
+                    "examples": path_plan.examples(),
+                    "warnings": [],
+                }
+                self._path_warnings = []
                 self._manifest_revision += 1
                 self.status = "review"
                 self.notice = "连接成功，请确认文件并选择保存位置"
@@ -722,10 +771,19 @@ class ReceiveService:
                 try:
                     resume = scan_resume(save_dir, current_manifest)
                     free = int(shutil.disk_usage(save_dir).free)
+                    path_warnings = (
+                        windows_long_path_warnings(
+                            save_dir,
+                            [item.destination_rel for item in current_manifest],
+                        )
+                        if os.name == "nt"
+                        else []
+                    )
                     with self.lock:
                         if self.status == "review":
                             self._resume = resume
                             self._free_space = free
+                            self._path_warnings = path_warnings
                 except OSError:
                     pass
         except (OSError, ProtocolError, ValueError) as exc:
@@ -777,7 +835,7 @@ class ReceiveService:
         raw_files = manifest["files"]
         if not raw_files:
             raise ProtocolError("发送方没有可接收的文件")
-        files: list[RemoteFile] = []
+        validated: list[dict[str, Any]] = []
         ids: set[str] = set()
         paths: set[str] = set()
         for raw in raw_files:
@@ -789,15 +847,26 @@ class ReceiveService:
                 raise ProtocolError("文件清单包含重复路径")
             ids.add(entry["id"])
             paths.add(folded)
-            files.append(
-                RemoteFile(
-                    id=entry["id"],
-                    rel_path=entry["path"],
-                    size=entry["size"],
-                    mtime_ns=entry["mtime_ns"],
-                    quick_hash=entry["quick_hash"],
-                )
+            validated.append(entry)
+        try:
+            path_plan = plan_destinations(
+                [entry["path"] for entry in validated],
+                windows=(os.name == "nt"),
             )
+        except NamingError as exc:
+            raise ProtocolError(str(exc)) from exc
+        files = [
+            RemoteFile(
+                id=entry["id"],
+                rel_path=entry["path"],
+                size=entry["size"],
+                mtime_ns=entry["mtime_ns"],
+                quick_hash=entry["quick_hash"],
+                mode=entry.get("mode"),
+                dest_rel_path=path_plan.mapping[entry["path"]],
+            )
+            for entry in validated
+        ]
         total = sum(item.size for item in files)
         declared = manifest.get("total_size")
         if declared is not None and declared != total:
@@ -811,6 +880,7 @@ class ReceiveService:
             "data_ports": list(ports),
             "chunk_size": chunk_size,
             "files": files,
+            "path_plan": path_plan,
             "sender_name": sender_name,
         }
 
@@ -1290,6 +1360,11 @@ class ReceiveService:
             transfer.abort("连接断开")
 
     # -- utilities -----------------------------------------------------
+    def _path_adaptation_state_locked(self) -> dict[str, Any]:
+        payload = dict(self._path_adaptation)
+        payload["warnings"] = list(self._path_warnings)
+        return payload
+
     def _resume_dict_locked(self) -> dict[str, Any]:
         needed = 0
         if self._save_dir is not None:
@@ -1359,6 +1434,7 @@ class ReceiveService:
                 },
                 "files_count": len(self.manifest),
                 "resume": resume,
+                "path_adaptation": self._path_adaptation_state_locked(),
                 "progress": progress,
                 "completed": self._completed_payload,
                 "data_ports": list(self._data_ports),

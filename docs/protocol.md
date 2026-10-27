@@ -110,7 +110,7 @@ Python 格式：`struct.Struct("!4s16sQII")`，头长 36 字节。
   "type": "hello",
   "protocol": 1,
   "app": "flashdrop",
-  "app_version": "0.1.0"
+  "app_version": "0.2.0"
 }
 ```
 
@@ -123,7 +123,7 @@ Python 格式：`struct.Struct("!4s16sQII")`，头长 36 字节。
   "type": "welcome",
   "protocol": 1,
   "app": "flashdrop",
-  "app_version": "0.1.0",
+  "app_version": "0.2.0",
   "session_id": "32-hex",
   "data_token": "32-hex",
   "data_ports": [45871, 45872, 45873, 45874],
@@ -140,18 +140,31 @@ Python 格式：`struct.Struct("!4s16sQII")`，头长 36 字节。
         "path": "项目归档/a.bin",
         "size": 1234567,
         "mtime_ns": 1760000000000000000,
-        "quick_hash": "40-hex"
+        "quick_hash": "40-hex",
+        "mode": 493
       }
     ]
   }
 }
 ```
 
-`path` 必须是相对路径，使用 `/` 分隔。接收端使用 `safe_transfer_path` 再验证：
+`path` 必须是相对路径，**只用 `/` 分隔**，并进行 Unicode NFC 归一。接收端使用 `safe_transfer_path` 再验证：
 
-- 拒绝绝对路径、Windows 盘符、空路径、NUL、`..`；
+- 拒绝绝对路径、盘符、空路径、NUL、`..`；
 - 顶层 `.flashdrop` 是保留目录；
-- 不允许重复 file id / 重复路径（路径比较 casefold）。
+- 反斜杠是合法的 macOS/Linux 文件名字符，不是路径分隔符；Windows 接收端会在本地把不合法名称适配为安全目标名；
+- 不允许重复 file id / 重复路径（NFC 后 casefold 比较）。
+
+文件 ID 是 NFC 相对路径 casefold 后的 BLAKE2b-128；快速指纹见 [architecture.md](architecture.md)。
+
+`mode` 是可选的 POSIX 权限字段：
+
+- 只有 POSIX 发送端会附带；
+- 值限定为 `0o777` 的 rwx 位，不包含 setuid/setgid/sticky；
+- POSIX 接收端在最终落盘后尽力应用；Windows 接收端忽略；
+- 旧发送端不提供该字段，接收端使用默认权限。
+
+接收端对 Windows 目标路径的适配（非法字符、保留名、长路径等）是**本地行为**，不会改变控制消息中的 `path`，也不会改变续传身份；接收端文件列表通过 `/api/receive/files` 额外返回 `dest_rel`。
 
 `manifest.total_size` 必须等于所有 `size` 之和。`data_ports` 非空、去重、范围 1–65535。
 
@@ -351,7 +364,7 @@ Python 格式：`struct.Struct("!4s16sQII")`，头长 36 字节。
 ## 6. 续传协商细节
 
 1. 接收端扫描 `<save>/.flashdrop/state/<id>.json`。
-2. 仅当 `id/path/size/mtime_ns/quick_hash` 全部与本次 manifest 匹配时才考虑复用。
+2. 仅当 `id/path/size/mtime_ns/quick_hash` 全部与本次 manifest 匹配时才考虑复用；`path` 是源清单路径，不是 Windows 本地适配后的目标路径。
 3. `partial` 且 part 文件存在、长度 `0 < n <= size` → offset = n。
 4. `done` 且目标文件存在、大小匹配 → offset = size（整文件跳过）。
 5. 发送端接受 offset，返回 `accepted_resume`。
@@ -380,7 +393,9 @@ Python 格式：`struct.Struct("!4s16sQII")`，头长 36 字节。
 - 当前 `PROTOCOL_VERSION = 1`。
 - 接收端在 `welcome` 中拒绝非 `1` 的协议。
 - 发送端接受缺失或 `1` 的 hello。
-- 新增可选消息或可选字段可以保持 v1，但涉及完成语义、续传匹配、数据帧布局的改动必须升 v2。
+- 新增可选消息或可选字段可以保持 v1。`mode` 就是 v1 的可选扩展；旧端点会忽略未知字段。
+- 涉及完成语义、续传匹配、数据帧布局的改动必须升 v2。
+- 路径的 NFC 和“只用 `/` 分隔”是 v1 的当前实现约定；修改会破坏旧续传，必须在发布说明中明确。
 - 不得依赖“先到块一定先完成”：并行数据连接意味着接收端必须能处理乱序。
 
 ## 9. 安全说明

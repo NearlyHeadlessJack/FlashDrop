@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import time
 import unittest
 from pathlib import Path
 
 from flashdrop.catalog import prepare_manifest
-from flashdrop.receiver import scan_resume
-from flashdrop.config import RESUME_STATE_VERSION
+from flashdrop.config import DEFAULT_CHUNK_SIZE, RESUME_STATE_VERSION
+from flashdrop.protocol import file_id_for
+from flashdrop.receiver import ReceiveService, scan_resume
 from tests.support import TransferPair, collect_files, make_tree, wait_until, workspace_temp
 
 
@@ -150,6 +152,62 @@ class IntegrationTests(unittest.TestCase):
             (destination / source.name / "a.txt").read_bytes(),
             b"retry me",
         )
+
+    @unittest.skipIf(os.name == "nt", "Windows has no POSIX executable mode")
+    def test_posix_executable_mode_survives_end_to_end(self) -> None:
+        base = workspace_temp(self)
+        source = base / "scripts"
+        source.mkdir()
+        script = source / "run.sh"
+        script.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+        os.chmod(script, 0o750)
+        destination = base / "dest"
+        destination.mkdir()
+        pair = TransferPair(source, destination, connections=2)
+        self.addCleanup(pair.close)
+        pair.start_to_review()
+        pair.complete()
+        target = destination / source.name / "run.sh"
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o750)
+
+    def test_windows_manifest_path_adaptation_preview(self) -> None:
+        service = ReceiveService()
+        path = "mac folder/报告:终稿?.pdf"
+        message = {
+            "type": "welcome",
+            "protocol": 1,
+            "session_id": "a" * 32,
+            "data_token": "b" * 32,
+            "data_ports": [45871],
+            "chunk_size": DEFAULT_CHUNK_SIZE,
+            "sender_name": "Mac",
+            "manifest": {
+                "count": 1,
+                "total_size": 3,
+                "files": [
+                    {
+                        "id": file_id_for(path),
+                        "path": path,
+                        "size": 3,
+                        "mtime_ns": 123,
+                        "quick_hash": "q" * 40,
+                    }
+                ],
+            },
+        }
+        parsed = service._parse_welcome(message)  # noqa: SLF001 - focused contract test
+        item = parsed["files"][0]
+        if os.name == "nt":
+            self.assertNotEqual(item.destination_rel, item.rel_path)
+            self.assertNotIn(":", item.destination_rel)
+            self.assertNotIn("?", item.destination_rel)
+            self.assertEqual(parsed["path_plan"].renamed_count, 1)
+        else:
+            self.assertEqual(item.destination_rel, item.rel_path)
+            self.assertEqual(parsed["path_plan"].renamed_count, 0)
+        public = item.public()
+        self.assertEqual(public["dest_rel"], item.destination_rel)
+        self.assertIn("renamed", public)
 
     def test_scan_resume_ignores_bad_or_unrelated_records(self) -> None:
         base = workspace_temp(self)

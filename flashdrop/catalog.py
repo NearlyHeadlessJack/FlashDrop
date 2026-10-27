@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import stat
 import struct
 import threading
 from dataclasses import dataclass, field
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from .config import QUICK_HASH_SAMPLE, RESUME_DIR_NAME
+from .naming import normalize_nfc
 from .protocol import file_id_for, make_manifest_entry
 
 
@@ -43,6 +45,7 @@ class ManifestFile:
     size: int
     mtime_ns: int
     quick_hash: str
+    mode: int | None = None
 
     def manifest_entry(self) -> dict[str, object]:
         return make_manifest_entry(
@@ -51,6 +54,7 @@ class ManifestFile:
             size=self.size,
             mtime_ns=self.mtime_ns,
             quick_hash=self.quick_hash,
+            mode=self.mode,
         )
 
 
@@ -74,15 +78,15 @@ def _canonical(path: str | os.PathLike[str]) -> str:
 
 
 def _top_name(rel_path: str) -> str:
-    return rel_path.replace("\\", "/").split("/", 1)[0].casefold()
+    return normalize_nfc(rel_path).split("/", 1)[0].casefold()
 
 
 def _reserved_top(name: str) -> bool:
-    return name.casefold() == RESUME_DIR_NAME.casefold()
+    return normalize_nfc(name).casefold() == RESUME_DIR_NAME.casefold()
 
 
 def _unique_top_name(desired: str, used: set[str]) -> str:
-    base = desired or "shared"
+    base = normalize_nfc(desired) or "shared"
     candidate = base
     index = 2
     while candidate.casefold() in used or _reserved_top(candidate):
@@ -92,8 +96,9 @@ def _unique_top_name(desired: str, used: set[str]) -> str:
 
 
 def _unique_file_name(name: str, used_rel: set[str], used_top: set[str]) -> str:
-    stem, suffix = os.path.splitext(name)
-    candidate = name
+    normalized = normalize_nfc(name)
+    stem, suffix = os.path.splitext(normalized)
+    candidate = normalized
     index = 2
     while (
         candidate.casefold() in used_top
@@ -103,6 +108,23 @@ def _unique_file_name(name: str, used_rel: set[str], used_top: set[str]) -> str:
         candidate = f"{stem} ({index}){suffix}"
         index += 1
     return candidate
+
+
+def _unique_nested_rel(rel_path: str, used_rel: set[str]) -> str:
+    """Make an NFC-normalized nested path unique by suffixing its filename."""
+
+    normalized = normalize_nfc(rel_path)
+    if normalized.casefold() not in used_rel:
+        return normalized
+    parent, name = normalized.rsplit("/", 1) if "/" in normalized else ("", normalized)
+    stem, suffix = os.path.splitext(name)
+    index = 2
+    while True:
+        candidate_name = f"{stem} ({index}){suffix}"
+        candidate = f"{parent}/{candidate_name}" if parent else candidate_name
+        if candidate.casefold() not in used_rel:
+            return candidate
+        index += 1
 
 
 def _clean_warning(path: str, exc: BaseException) -> str:
@@ -124,13 +146,17 @@ def _read_quick_hash(path: Path, size: int, mtime_ns: int) -> str:
     return digest.hexdigest()[:40]
 
 
-def fingerprint_file(path: str | os.PathLike[str]) -> tuple[int, int, str]:
-    """Return ``(size, mtime_ns, quick_hash)`` for a source file.
+def fingerprint_file(path: str | os.PathLike[str]) -> tuple[int, int, int | None, str]:
+    """Return ``(size, mtime_ns, posix_mode, quick_hash)`` for a source file.
 
     The sample includes both ends of large files. It is intentionally cheap:
     it detects normal edits between sessions without reading multi-gigabyte
     files before transfer. Full-file cryptographic hashing would halve
     throughput on storage-bound links.
+
+    POSIX permission bits are captured on macOS/Linux so an executable script
+    or app payload keeps its executable bit when saved on another POSIX host.
+    Windows has no equivalent Unix mode, so its manifests leave ``mode`` out.
     """
 
     file_path = Path(path)
@@ -146,7 +172,10 @@ def fingerprint_file(path: str | os.PathLike[str]) -> tuple[int, int, str]:
             after = file_path.stat()
         if (after.st_size, after.st_mtime_ns) != (before.st_size, before.st_mtime_ns):
             raise CatalogError(f"文件在读取指纹时发生变化，请重新选择: {file_path}")
-        return int(after.st_size), int(after.st_mtime_ns), quick
+        # Only preserve rwx permission bits. setuid/setgid/sticky bits are not
+        # meaningful for a casual file transfer and are safer left behind.
+        mode = (stat.S_IMODE(after.st_mode) & 0o777) if os.name != "nt" else None
+        return int(after.st_size), int(after.st_mtime_ns), mode, quick
     except FileNotFoundError as exc:
         raise CatalogError(f"文件不存在: {file_path}") from exc
     except OSError as exc:
@@ -156,7 +185,7 @@ def fingerprint_file(path: str | os.PathLike[str]) -> tuple[int, int, str]:
 def prepare_manifest(files: Iterable[LocalFile]) -> list[ManifestFile]:
     prepared: list[ManifestFile] = []
     for item in files:
-        size, mtime_ns, quick = fingerprint_file(item.source)
+        size, mtime_ns, mode, quick = fingerprint_file(item.source)
         prepared.append(
             ManifestFile(
                 id=item.id,
@@ -165,6 +194,7 @@ def prepare_manifest(files: Iterable[LocalFile]) -> list[ManifestFile]:
                 size=size,
                 mtime_ns=mtime_ns,
                 quick_hash=quick,
+                mode=mode,
             )
         )
     return prepared
@@ -246,6 +276,7 @@ class SenderCatalog:
                         path,
                         existing_sources=existing_sources,
                         pending_sources=pending_sources,
+                        existing_rels=existing_rels,
                         used_top=used_top,
                         new_files=new_files,
                         warnings=warnings,
@@ -299,7 +330,7 @@ class SenderCatalog:
         except OSError as exc:
             warnings.append(_clean_warning(str(path), exc))
             return False
-        name = path.name or "file"
+        name = normalize_nfc(path.name or "file")
         rel_name = _unique_file_name(name, existing_rels, used_top)
         used_top.add(rel_name.casefold())
         existing_rels.add(rel_name.casefold())
@@ -321,6 +352,7 @@ class SenderCatalog:
         *,
         existing_sources: set[str],
         pending_sources: set[str],
+        existing_rels: set[str],
         used_top: set[str],
         new_files: list[LocalFile],
         warnings: list[str],
@@ -351,7 +383,7 @@ class SenderCatalog:
         if not candidates:
             return 0
 
-        desired_root = root.name or "shared-folder"
+        desired_root = normalize_nfc(root.name or "shared-folder")
         root_name = _unique_top_name(desired_root, used_top)
         used_top.add(root_name.casefold())
 
@@ -359,19 +391,20 @@ class SenderCatalog:
             try:
                 if not path.is_file():
                     continue
-                stat = path.stat()
-                relative = path.relative_to(root).as_posix()
+                file_stat = path.stat()
+                relative = normalize_nfc(path.relative_to(root).as_posix())
             except (OSError, ValueError) as exc:
                 warnings.append(_clean_warning(str(path), exc))
                 continue
-            rel_path = f"{root_name}/{relative}"
+            rel_path = _unique_nested_rel(f"{root_name}/{relative}", existing_rels)
+            existing_rels.add(rel_path.casefold())
             new_files.append(
                 LocalFile(
                     id=file_id_for(rel_path),
                     source=str(path),
                     rel_path=rel_path,
-                    size=int(stat.st_size),
-                    mtime_ns=int(stat.st_mtime_ns),
+                    size=int(file_stat.st_size),
+                    mtime_ns=int(file_stat.st_mtime_ns),
                 )
             )
             pending_sources.add(_canonical(path))

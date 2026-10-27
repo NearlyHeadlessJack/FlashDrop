@@ -25,18 +25,20 @@ CLI 参数：`--port`、`--no-browser`、`--debug`、`--version`。WebUI 端口�
 ├── README.md
 ├── pyproject.toml
 ├── start.bat
+├── start.command            # macOS 双击启动
 ├── flashdrop/
 │   ├── __init__.py          # 版本、应用名
 │   ├── __main__.py          # python -m flashdrop
 │   ├── cli.py               # argparse、启动、Ctrl+C
 │   ├── app.py               # mode 与业务门面
 │   ├── web.py               # HTTP server、API 路由、静态文件
-│   ├── catalog.py           # 文件选择/展开/去重/快速指纹
+│   ├── catalog.py           # 文件选择/展开/NFC/去重/快速指纹/权限位
+│   ├── naming.py            # Windows 目标名称适配与冲突规划
 │   ├── protocol.py          # 控制帧、数据帧、路径安全、ID
 │   ├── control.py           # ControlChannel + 心跳
 │   ├── sender.py            # 发送状态机与多通道调度
 │   ├── receiver.py          # 接收状态机、续传扫描、落盘
-│   ├── picker.py            # Tk 原生选择器子进程
+│   ├── picker.py            # macOS osascript / Tk 选择器子进程
 │   ├── metrics.py           # 进度、速度、ETA
 │   ├── netutil.py           # 端口扫描、地址发现、socket 选项
 │   ├── config.py            # 默认值和超时
@@ -49,6 +51,8 @@ CLI 参数：`--port`、`--no-browser`、`--debug`、`--version`。WebUI 端口�
 │   ├── support.py
 │   ├── test_protocol.py
 │   ├── test_catalog.py
+│   ├── test_naming.py
+│   ├── test_picker.py
 │   ├── test_writer.py
 │   ├── test_integration.py
 │   └── test_http_e2e.py
@@ -67,7 +71,7 @@ CLI 参数：`--port`、`--no-browser`、`--debug`、`--version`。WebUI 端口�
 |---|---|
 | `/api/state` | 完整 UI 快照（模式、发送/接收状态、进度、清单统计、监听地址） |
 | `/api/send/files?offset=0&limit=200` | 发送文件分页；limit 上限 500 |
-| `/api/receive/files?offset=0&limit=200` | 远端 manifest 分页 |
+| `/api/receive/files?offset=0&limit=200` | 远端 manifest 分页；Windows 上含 `dest_rel` 适配目标名 |
 | `/api/health` | `{"ok": true}` |
 
 `/api/state` 的关键结构：
@@ -94,7 +98,14 @@ CLI 参数：`--port`、`--no-browser`、`--debug`、`--version`。WebUI 端口�
     "notice": "正在等待接收方连接",
     "completed": null
   },
-  "receive": { "...": "..." }
+  "receive": {
+    "...": "...",
+    "path_adaptation": {
+      "renamed": 0,
+      "examples": [],
+      "warnings": []
+    }
+  }
 }
 ```
 
@@ -122,6 +133,11 @@ CLI 参数：`--port`、`--no-browser`、`--debug`、`--version`。WebUI 端口�
 
 原生选择 API 会在服务端启动一个短命 Python 子进程运行 `flashdrop/picker.py`，读取其 stdout JSON。不要让 Tk 在 HTTP/服务线程中直接创建主窗口。
 
+- macOS：`picker.py` 先调用 `/usr/bin/osascript -l JavaScript`，通过 Standard Additions 显示文件/文件夹窗口；无需 Tk。
+- 其他平台或 osascript 失败：回退到独立进程中的 Tk。
+- 选择器的 stdout 只有一个 JSON 对象；解析器兼容 osascript 可能的双重 JSON 编码。
+- 取消选择返回空 `paths` 且退出码 0；实际错误才返回非零码和 `error`。
+
 ## 4. WebUI 结构
 
 ### 4.1 文件与职责
@@ -148,6 +164,8 @@ lastSendStatus ...
 - 状态映射集中在 `SEND_PHASES` / `RECEIVE_PHASES`；新增状态必须同时更新这里、`.busy` 判定、后端 state 和文档。
 - 长操作按钮统一用 `withBusy()`，防止双击；错误用 toast，并在相关表单里保留可操作的 inline 错误。
 - 文件列表最多先显示 120 项，剩余由「显示更多」分页。
+- 接收端文件列表优先使用 `dest_rel`（Windows 实际保存名），并用「名称已适配」标识；`path_adaptation` 决定审核页提示。
+- Mac 字体栈与 Safari 前缀集中在 `style.css` 根变量/相关规则；新增视觉特性前不要依赖只有 Chromium 支持的 CSS。
 - CSP 禁止内联脚本和内联事件处理；不要添加 `onclick` 属性。样式属性通过 JS 修改，CSP 的 `style-src` 已允许内联样式。
 
 ### 4.4 安全/交互注意
@@ -197,10 +215,12 @@ Get-ChildItem flashdrop -Filter *.py | ForEach-Object { python -m py_compile $_.
 测试类别：
 
 - `test_protocol.py`：ID、路径安全、控制帧、数据头布局。
-- `test_catalog.py`：目录展开、`.flashdrop` 忽略、同名去重、增删。
-- `test_writer.py`：乱序块、重叠块、未完成文件。
-- `test_integration.py`：真实 TCP 双实例、多通道、空文件、嵌套、续传。
-- `test_http_e2e.py`：HTTP 完整传输、静态资源、模式/校验错误。
+- `test_catalog.py`：目录展开、`.flashdrop` 忽略、同名去重、NFC、增删。
+- `test_naming.py`：Windows 非法字符、保留名、长组件、确定性、NFC 冲突。
+- `test_picker.py`：JXA 脚本结构、osascript JSON 输出解析；不会在非 macOS 上启动真实选择器。
+- `test_writer.py`：乱序块、重叠块、未完成文件、适配目标名、POSIX 权限（平台条件）。
+- `test_integration.py`：真实 TCP 双实例、多通道、空文件、嵌套、续传、Windows 目标名规划。
+- `test_http_e2e.py`：HTTP 完整传输、静态资源、`path_adaptation` 字段、模式/校验错误。
 
 测试的设计偏好：
 
@@ -217,6 +237,8 @@ Get-ChildItem flashdrop -Filter *.py | ForEach-Object { python -m py_compile $_.
 4. 选择保存目录 → 开始接收 → 双方进度、速度、完成页。
 5. 中途关闭接收端或停止发送 → 确认双方错误页可操作；重连后可续传。
 6. 打开帮助、窄屏（≤680px）检查布局和按钮。
+7. macOS：没有 Tk 时确认 osascript 文件窗口；允许本地网络权限后传输。
+8. macOS → Windows：发一个含 `:`/`?` 或 `CON.txt` 的文件，确认接收端提示改名并使用安全路径。
 
 ## 7. 代码约定
 

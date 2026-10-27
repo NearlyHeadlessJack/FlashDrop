@@ -9,6 +9,8 @@ tests/_tmp/
 artifacts/
 .venv/
 venv/
+.DS_Store
+._*
 
 # C extensions
 *.so

@@ -8,31 +8,52 @@
 - 断点续传：中断后重新连接并选择同一个保存文件夹，自动跳过已经写入的字节。
 - 块级校验：每个数据块 CRC32 校验；文件完整落盘后才原子替换到目标路径。
 - 本地 WebUI：文件预览、增删、连接确认、实时进度都在浏览器中完成。
-- 只依赖 Python 标准库，支持 Windows / Linux / macOS（原生选择窗口需要 Tk）。
+- Windows ↔ macOS：文件名 Unicode 归一、Windows 目标名自动适配、macOS 原生 Finder 选择器、POSIX 可执行权限保留。
+- 只依赖 Python 标准库，支持 Windows / Linux / macOS。macOS 无 Tk 时使用系统 `osascript` 选择器。
 
 > **安全边界**：当前版本不提供加密、身份认证或访问控制。请只在自己信任的局域网中使用，不要把控制端口暴露到公网。
 
 ## 快速开始
 
-要求 Python **3.10+**，Windows 安装包默认自带 `tkinter`。项目不需要 `pip install` 任何第三方包。
+要求 Python **3.10+**，项目不需要 `pip install` 任何第三方包。
+
+### Windows
 
 ```powershell
 cd C:\Users\jack\flash
 python -m flashdrop
 ```
 
-浏览器会自动打开本地控制台。也可以直接双击 [`start.bat`](start.bat)。
+也可以直接双击 [`start.bat`](start.bat)。
 
-常用参数：
+### macOS
 
-```powershell
+```bash
+cd /path/to/flash
+chmod +x start.command     # 仅首次
+open start.command
+```
+
+脚本源文件：[start.command](start.command)。
+
+或直接在终端运行：
+
+```bash
+python3 -m flashdrop
+```
+
+macOS 的文件选择优先使用系统自带的 `osascript`，不要求 Python 安装 Tkinter。首次接收时请允许 Python 接受传入连接，并检查「系统设置 → 隐私与安全 → 本地网络」权限。
+
+浏览器会自动打开本地控制台。常用参数：
+
+```text
 python -m flashdrop --no-browser          # 不自动打开浏览器
 python -m flashdrop --port 8765           # 指定 WebUI 端口（被占用时自动换端口）
 python -m flashdrop --debug               # 输出调试日志
 python -m flashdrop --version
 ```
 
-WebUI 只监听 `127.0.0.1`，是控制台，不是传输端口。传输使用独立的控制端口和数据端口。
+WebUI 只监听 `127.0.0.1`，是控制台，不是传输端口。传输使用独立的控制端口和数据端口。跨平台差异详见 [docs/compatibility.md](docs/compatibility.md)。
 
 ## 两台电脑怎么用
 
@@ -60,6 +81,14 @@ WebUI 只监听 `127.0.0.1`，是控制台，不是传输端口。传输使用�
 6. 点击「开始接收」。接收端会打开多条数据连接，并逐块校验写入。
 
 已有可续传分片时，保存位置下方会显示「发现 N 个可续传文件」。开始后进度条会从已保存的百分比继续。
+
+### 3. Windows ↔ macOS 小提示
+
+- macOS → Windows 时，Windows 接收端会自动适配非法字符、Windows 保留名、尾部点和空格、过长文件名；清单里显示的是实际保存名。
+- 普通文件名不会改变。接收端会把 NFC/NFD 重音文件名统一，避免视觉同名覆盖。
+- macOS 可执行权限会在 macOS → macOS 时保留；Windows 没有对应权限位。
+- `.app`、Framework、包含符号链接或资源叉的工程请先打 zip。
+- 更多细节见 [docs/compatibility.md](docs/compatibility.md)。
 
 ## 断点续传
 
@@ -104,7 +133,9 @@ WebUI 只监听 `127.0.0.1`，是控制台，不是传输端口。传输使用�
 
 Windows 第一次监听时通常会弹出防火墙提示。请允许 Python 访问**专用网络**，或者按程序路径放行。更稳妥的做法是允许 `python.exe`，而不是逐个放行临时数据端口。
 
-如果发送端有多张网卡，页面会列出全部本机 IPv4 地址。首选地址可能是虚拟网卡/WSL/VPN；对方连不上时换一个地址即可。
+macOS 也会在首次监听/接收时询问权限。允许 Python 接受传入连接，并检查「隐私与安全 → 本地网络」。终端/IDE 启动的 Python 也受该权限影响。
+
+如果发送端有多张网卡，页面会列出全部本机 IPv4 地址。首选地址可能是虚拟网卡/WSL/VPN/Thunderbolt 桥接；对方连不上时换一个地址即可。
 
 ## 常见问题
 
@@ -113,11 +144,12 @@ Windows 第一次监听时通常会弹出防火墙提示。请允许 Python 访�
 | 接收端连接超时 | 两台电脑是否在同一局域网；发送端是否已经点「开启传输」；防火墙是否放行；尝试发送端列出的其他 IP |
 | 控制端口被占用 | 在发送端修改控制端口，或填 `0` 自动分配 |
 | 数据连接建立失败 | 防火墙可能只放行了控制端口；按程序放行 Python，或检查安全软件 |
-| 系统选择窗口没出现 | 使用「手动输入路径」；Linux 上可安装 `python3-tk`；在远程桌面/无桌面环境使用手动路径 |
+| 系统选择窗口没出现 | macOS 会先尝试系统 osascript，再尝试 Tk；都不行时用「手动输入路径」。Linux 可安装 `python3-tk` |
 | 点「开始接收」提示空间不足 | 选择空间更大的目录；续传时会按剩余字节数检查 |
 | 传输到一半中断 | 重新连接并选择同一保存目录，程序会扫描 `.flashdrop` 续传 |
 | 接收完成但文件没出现 | 检查是否有保存失败提示；部分成功时已保存文件会保留，失败文件的 `.flashdrop` 记录也会保留 |
-| 文件名在 Windows 上非法或路径过长 | 当前版本不主动重命名；请缩短路径或在源端调整文件名 |
+| macOS → Windows 文件名变了 | 这是 Windows 安全名称适配，清单会显示实际保存名；详见兼容性文档 |
+| Windows 路径过长保存失败 | 缩短保存目录或把深层文件夹打包；长路径警告会显示在接收审核页 |
 
 ## 项目结构
 
@@ -131,17 +163,19 @@ flashdrop/
 ├── control.py        # 带心跳的 JSON 控制通道
 ├── sender.py         # 监听、会话状态机、多通道发送调度
 ├── receiver.py       # 连接、清单、分片写入、续传与落盘
-├── picker.py         # 独立进程中的 Tk 原生选择窗口
+├── picker.py         # 独立进程中的原生选择窗口（macOS 优先 osascript，其他平台 Tk）
+├── naming.py         # NFC、Windows 文件名适配、路径冲突检测
 ├── metrics.py        # 进度、速度、ETA
 ├── netutil.py        # 端口分配、地址发现、Socket 选项
 └── web/              # 无构建步骤的 HTML/CSS/JS WebUI
 tests/                # unittest + 本机双实例端到端测试
-docs/                 # 架构、协议、开发、运维与决策文档
+docs/                 # 架构、协议、开发、运维、跨平台与决策文档
 ```
 
 ## 文档
 
 - [AGENTS.md](AGENTS.md) — 面向后续开发者/代理的项目导航与改动约束（先读这个）。
+- [docs/compatibility.md](docs/compatibility.md) — Windows ↔ macOS 兼容矩阵、文件名、权限和 Safari。
 - [docs/architecture.md](docs/architecture.md) — 线程模型、状态机、续传目录与关键不变量。
 - [docs/protocol.md](docs/protocol.md) — 控制消息与二进制数据帧的精确格式。
 - [docs/development.md](docs/development.md) — 开发、测试、WebUI 结构和 API 一览。
@@ -155,14 +189,15 @@ python -m unittest discover -s tests -t . -v
 node --check flashdrop/web/app.js
 ```
 
-测试覆盖：路径安全、文件清单去重、协议帧、乱序写入、多通道端到端、续传、HTTP API 和静态 WebUI。
+测试覆盖：路径安全、Unicode/Windows 名称适配、文件清单去重、协议帧、乱序写入、多通道端到端、续传、HTTP API 和静态 WebUI。
 
 ## 当前版本的限制
 
-- v0.1.0 **无加密、无认证**，仅适合可信局域网。
-- 单进程一次只服务一个发送或一个接收会话。
-- 不传输空目录、符号链接目录、ACL/权限位；会保留普通文件和目录结构，并恢复 mtime。
+- v0.2.0 **无加密、无认证**，仅适合可信局域网。macOS 端支持已实现，但仍建议首次使用时做小文件验收。
+- 单进程一次只服务一个发送或一个接收会话，仅支持 IPv4。
+- 不传输空目录、符号链接语义、扩展属性/资源叉、ACL；会保留普通文件和目录结构、mtime，并在 POSIX 两端保留 rwx 权限。
+- `.app`/Framework 请先打 zip；Windows 没有 POSIX 可执行权限位。
 - 不支持传输中动态增删文件；开始发送后清单固定。
-- 目标文件会被覆盖；同名冲突会在发送端自动加 ` (2)` 后缀，请在预览中确认传输路径。
+- 目标文件会被覆盖；同名冲突会在发送端加 ` (2)` 后缀，Windows 接收端还会做安全文件名适配，请在双方预览中确认路径。
 - 超多文件（十万级）时，清单需整体放入控制帧，WebUI 列表会分页；建议先分组传输。
 - 使用抽样快速指纹，不是完整文件 SHA-256；见上文「指纹说明」。

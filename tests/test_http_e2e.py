@@ -80,6 +80,9 @@ class HttpEndToEndTests(unittest.TestCase):
         self.assertEqual(receiver_state["receive"]["manifest"]["count"], 3)
         self.assertIsNone(receiver_state["receive"]["save_dir"])
         self.assertFalse(receiver_state["receive"]["can_start"])
+        adaptation = receiver_state["receive"]["path_adaptation"]
+        self.assertEqual(adaptation["renamed"], 0)
+        self.assertIn("warnings", adaptation)
 
         result = http_json(
             f"{receiver_server.url}api/receive/set-dir",
@@ -119,6 +122,7 @@ class HttpEndToEndTests(unittest.TestCase):
         self.assertIn("我要发送", html)
         self.assertIn("我要接收", html)
         self.assertIn('id="send-file-list"', html)
+        self.assertIn('id="receive-compat-notice"', html)
         js = http_text(f"{server.url}app.js")
         self.assertIn("/api/send/start", js)
         css = http_text(f"{server.url}style.css")

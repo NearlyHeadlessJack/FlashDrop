@@ -563,9 +563,10 @@
       const row = document.createElement("div");
       row.className = "file-row";
 
+      const destinationRel = kind === "receive" ? (item.dest_rel || item.rel) : item.rel;
       const type = document.createElement("span");
       type.className = "file-type";
-      const name = basename(item.rel);
+      const name = basename(destinationRel);
       const dot = name.lastIndexOf(".");
       type.textContent = dot > 0 && name.length > dot + 1 ? name.slice(dot + 1, dot + 5).toUpperCase() : "FILE";
 
@@ -573,12 +574,24 @@
       main.className = "file-main";
       const nameEl = document.createElement("span");
       nameEl.className = "file-name";
-      nameEl.textContent = name;
-      nameEl.title = item.rel || name;
+      nameEl.title = kind === "receive" && item.renamed ? `保存名：${destinationRel}\n原名：${item.rel}` : (item.rel || name);
+      const nameText = document.createElement("span");
+      nameText.className = "file-name-text";
+      nameText.textContent = name;
+      nameEl.append(nameText);
+      if (kind === "receive" && item.renamed) {
+        const badge = document.createElement("span");
+        badge.className = "file-name-compat";
+        badge.textContent = "名称已适配";
+        badge.title = `原名：${item.rel}`;
+        nameEl.append(badge);
+      }
       const pathEl = document.createElement("span");
       pathEl.className = "file-path";
-      pathEl.textContent = item.rel;
-      pathEl.title = kind === "send" ? `来源：${item.path}\n发送路径：${item.rel}` : `保存路径：${item.rel}`;
+      pathEl.textContent = destinationRel;
+      pathEl.title = kind === "send"
+        ? `来源：${item.path}\n发送路径：${item.rel}`
+        : (item.renamed ? `保存路径：${destinationRel}\n原名：${item.rel}` : `保存路径：${destinationRel}`);
       main.append(nameEl, pathEl);
 
       const size = document.createElement("span");
@@ -765,6 +778,9 @@
         meta: [
           `${formatCount(completed.files || receive.manifest.count)} 个文件`,
           formatBytes(completed.bytes || receive.manifest.total_size),
+          receive.path_adaptation && receive.path_adaptation.renamed
+            ? `${formatCount(receive.path_adaptation.renamed)} 个名称已适配`
+            : null,
           completed.resumed_bytes ? `续传 ${formatBytes(completed.resumed_bytes)}` : null,
           completed.elapsed != null ? `用时 ${formatDuration(completed.elapsed)}` : null,
         ],
@@ -825,6 +841,44 @@
       notice.querySelector("p").textContent = "这个文件夹暂无可续传分片，将从头接收；完成后会清理内部记录。";
     } else {
       notice.hidden = true;
+    }
+
+    const adaptation = receive.path_adaptation || {};
+    const renamed = Number(adaptation.renamed) || 0;
+    const warnings = Array.isArray(adaptation.warnings) ? adaptation.warnings : [];
+    const examples = Array.isArray(adaptation.examples) ? adaptation.examples : [];
+    const compatNotice = $("receive-compat-notice");
+    if (renamed > 0 || warnings.length > 0) {
+      compatNotice.hidden = false;
+      setText(
+        "receive-compat-title",
+        renamed > 0 ? `已自动适配 ${formatCount(renamed)} 个 Windows 文件名` : "保存路径兼容性提示",
+      );
+      setText(
+        "receive-compat-desc",
+        renamed > 0
+          ? "Windows 不接受部分 macOS 文件名。已生成稳定且唯一的保存名，文件清单显示的是实际保存路径。"
+          : "",
+      );
+      const examplesEl = $("receive-compat-examples");
+      examplesEl.innerHTML = "";
+      examples.forEach((example) => {
+        const li = document.createElement("li");
+        li.textContent = `原名 ${example.from}  →  保存为 ${example.to}`;
+        li.title = `${example.from}\n→\n${example.to}`;
+        examplesEl.append(li);
+      });
+      const warningsEl = $("receive-compat-warnings");
+      warningsEl.innerHTML = "";
+      warnings.forEach((warning) => {
+        const li = document.createElement("li");
+        li.textContent = warning;
+        warningsEl.append(li);
+      });
+    } else {
+      compatNotice.hidden = true;
+      $("receive-compat-examples").innerHTML = "";
+      $("receive-compat-warnings").innerHTML = "";
     }
 
     const reviewError = $("receive-review-error");

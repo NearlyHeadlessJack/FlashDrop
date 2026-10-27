@@ -73,6 +73,41 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(len(manifest), 1)
         self.assertEqual(manifest[0].size, 5)
         self.assertEqual(len(manifest[0].quick_hash), 40)
+        if os.name == "nt":
+            self.assertIsNone(manifest[0].mode)
+            self.assertNotIn("mode", manifest[0].manifest_entry())
+        else:
+            self.assertIsInstance(manifest[0].mode, int)
+            self.assertIn("mode", manifest[0].manifest_entry())
+
+    def test_macos_nfd_filename_is_normalized_for_transfer(self) -> None:
+        base = workspace_temp(self)
+        decomposed = "cafe\u0301.txt"
+        source = base / decomposed
+        source.write_text("unicode", encoding="utf-8")
+        catalog = SenderCatalog()
+        catalog.add_paths([str(source)])
+        files, _ = catalog.page(0, 10)
+        self.assertEqual(files[0]["rel"], "café.txt")
+        self.assertEqual(files[0]["path"], str(source))
+
+    def test_nfc_collisions_in_folder_are_suffixed(self) -> None:
+        base = workspace_temp(self)
+        source = base / "unicode"
+        source.mkdir()
+        nfc = source / "café.txt"
+        nfd = source / "cafe\u0301.txt"
+        nfc.write_text("nfc", encoding="utf-8")
+        nfd.write_text("nfd", encoding="utf-8")
+        if not nfc.exists() or not nfd.exists() or nfc.samefile(nfd):
+            self.skipTest("filesystem normalizes NFC/NFD names to one file")
+        catalog = SenderCatalog()
+        result = catalog.add_paths([str(source)])
+        self.assertEqual(result.added, 2)
+        files, _ = catalog.page(0, 10)
+        rels = sorted(item["rel"] for item in files)
+        self.assertEqual(len(set(rels)), 2)
+        self.assertTrue(all(rel.startswith("unicode/") for rel in rels))
 
     def test_remove_and_clear(self) -> None:
         base = workspace_temp(self)

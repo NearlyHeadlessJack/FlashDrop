@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import stat
 import unittest
 from pathlib import Path
 
@@ -46,6 +48,27 @@ class ReceiveWriterTests(unittest.TestCase):
             writer.write(3, b"defgh")
         writer.close()
 
+    def test_writer_uses_adapted_destination_path(self) -> None:
+        base = workspace_temp(self)
+        save = base / "save"
+        save.mkdir()
+        entry = RemoteFile(
+            id=file_id_for("mac/报告:终稿?.pdf"),
+            rel_path="mac/报告:终稿?.pdf",
+            dest_rel_path="mac/报告_终稿_~1234abcd.pdf",
+            size=2,
+            mtime_ns=1,
+            quick_hash="q" * 40,
+        )
+        writer = ReceiveFileWriter(entry, save, 0, done_existing=False)
+        writer.write(0, b"ok")
+        writer.finalize()
+        self.assertEqual(
+            (save / "mac" / "报告_终稿_~1234abcd.pdf").read_bytes(),
+            b"ok",
+        )
+        self.assertFalse((save / "mac" / "报告:终稿?.pdf").exists())
+
     def test_finalize_rejects_incomplete_file(self) -> None:
         base = workspace_temp(self)
         writer, _entry, _save = self._writer(base, b"abcdefgh")
@@ -53,6 +76,30 @@ class ReceiveWriterTests(unittest.TestCase):
         with self.assertRaises(OSError):
             writer.finalize()
         writer.close()
+
+    @unittest.skipIf(os.name == "nt", "Windows has no POSIX executable mode")
+    def test_posix_mode_is_applied_on_finalize(self) -> None:
+        base = workspace_temp(self)
+        save = base / "save"
+        save.mkdir()
+        entry = RemoteFile(
+            id=file_id_for("scripts/run.sh"),
+            rel_path="scripts/run.sh",
+            size=4,
+            mtime_ns=1_700_000_000_000_000_000,
+            quick_hash="q" * 40,
+            mode=0o755,
+        )
+        probe = save / "mode-probe"
+        probe.write_bytes(b"")
+        os.chmod(probe, 0o755)
+        if stat.S_IMODE(probe.stat().st_mode) != 0o755:
+            self.skipTest("filesystem does not preserve POSIX permission bits")
+        writer = ReceiveFileWriter(entry, save, 0, done_existing=False)
+        writer.write(0, b"#!/\n")
+        writer.finalize()
+        target = save / "scripts" / "run.sh"
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o755)
 
 
 if __name__ == "__main__":

@@ -13,10 +13,10 @@ import json
 import re
 import socket
 import struct
-from pathlib import PurePosixPath
 from typing import Any
 
 from .config import MAX_CONTROL_FRAME, RESUME_DIR_NAME
+from .naming import normalize_nfc
 
 CONTROL_LENGTH = struct.Struct("!I")
 DATA_MAGIC = b"FDX1"
@@ -25,7 +25,6 @@ DATA_HEADER = struct.Struct("!4s16sQII")
 MAX_PAYLOAD = 32 * 1024 * 1024
 
 _HEX_ID = re.compile(r"^[0-9a-f]{32}$")
-_DRIVE = re.compile(r"^[A-Za-z]:")
 
 
 class ProtocolError(Exception):
@@ -37,9 +36,13 @@ class PeerClosed(ProtocolError):
 
 
 def file_id_for(rel_path: str) -> str:
-    """Stable file identity derived from the transfer-relative path."""
+    """Stable file identity derived from the NFC transfer-relative path.
 
-    normalized = rel_path.replace("\\", "/").casefold()
+    Wire paths are NFC-normalized so macOS NFD names and Windows NFC names
+    resolve to the same identity. Only ``/`` is a separator.
+    """
+
+    normalized = normalize_nfc(rel_path).casefold()
     return hashlib.blake2b(normalized.encode("utf-8", "surrogatepass"), digest_size=16).hexdigest()
 
 
@@ -131,31 +134,29 @@ def validate_file_id(value: Any) -> str:
 
 
 def safe_transfer_path(raw: Any) -> str:
-    """Validate a sender-provided relative path.
+    """Validate a sender-provided POSIX-relative path.
 
-    The receiver never trusts that the path is safe. Back-slashes are treated
-    as separators as well because manifests may come from another OS.
+    Only ``/`` separates components. A backslash is an ordinary filename
+    character on macOS/Linux and is translated later if the receiver is
+    Windows. The receiver never trusts that the path is safe: absolute paths,
+    drive-relative paths, NUL, and ``..`` are rejected.
     """
 
     if not isinstance(raw, str):
         raise ProtocolError("文件路径缺失")
     if not raw or "\x00" in raw:
         raise ProtocolError("文件路径为空或包含非法字符")
-    normalized = raw.replace("\\", "/")
-    if normalized.startswith("/"):
+    if raw.startswith("/") or raw.startswith("\\"):
         raise ProtocolError("不允许绝对路径")
-    if _DRIVE.match(normalized):
+    if re.match(r"^[A-Za-z]:", raw):
         raise ProtocolError("不允许盘符路径")
-    parts = PurePosixPath(normalized).parts
-    if not parts:
-        raise ProtocolError("文件路径为空")
     clean: list[str] = []
-    for part in parts:
+    for part in raw.split("/"):
         if part in ("", "."):
             continue
         if part == "..":
             raise ProtocolError("文件路径不能包含 ..")
-        clean.append(part)
+        clean.append(normalize_nfc(part))
     if not clean:
         raise ProtocolError("文件路径为空")
     if clean[0].casefold() == RESUME_DIR_NAME.casefold():
@@ -170,14 +171,18 @@ def make_manifest_entry(
     size: int,
     mtime_ns: int,
     quick_hash: str,
+    mode: int | None = None,
 ) -> dict[str, Any]:
-    return {
+    entry: dict[str, Any] = {
         "id": file_id,
         "path": rel_path,
         "size": int(size),
         "mtime_ns": int(mtime_ns),
         "quick_hash": quick_hash,
     }
+    if mode is not None:
+        entry["mode"] = int(mode)
+    return entry
 
 
 def validate_manifest_entry(entry: Any) -> dict[str, Any]:
@@ -194,12 +199,21 @@ def validate_manifest_entry(entry: Any) -> dict[str, Any]:
     quick_hash = entry.get("quick_hash")
     if not isinstance(quick_hash, str) or not quick_hash:
         raise ProtocolError("文件指纹缺失")
+    mode = entry.get("mode")
+    if mode is not None:
+        if (
+            not isinstance(mode, int)
+            or isinstance(mode, bool)
+            or not (0 <= mode <= 0o777)
+        ):
+            raise ProtocolError("文件权限位非法")
     return {
         "id": file_id,
         "path": path,
         "size": size,
         "mtime_ns": mtime_ns,
         "quick_hash": quick_hash,
+        "mode": mode,
     }
 
 

@@ -473,6 +473,16 @@
               <div class="inline-alert error" id="receive-review-error" hidden></div>
             </div>
 
+            <div class="compat-notice" id="receive-compat-notice" hidden>
+              <span class="compat-icon">⇄</span>
+              <div class="compat-copy">
+                <b id="receive-compat-title">已适配 Windows 文件名</b>
+                <p id="receive-compat-desc"></p>
+                <ul class="compat-examples" id="receive-compat-examples"></ul>
+                <ul class="compat-warnings" id="receive-compat-warnings"></ul>
+              </div>
+            </div>
+
             <div class="receive-files-section">
               <div class="section-title">
                 <div><span class="step-label receive-step"><i>03</i>文件清单</span><h3>对方准备发送</h3></div>
@@ -547,7 +557,7 @@
 
   <footer class="site-footer">
     <div class="footer-inner">
-      <span><b>FlashDrop</b> <span id="footer-version">v0.1.0</span></span>
+      <span><b>FlashDrop</b> <span id="footer-version">v0.2.0</span></span>
       <span>本地 P2P · 无云端中转 · 数据由你掌控</span>
     </div>
   </footer>
@@ -586,7 +596,8 @@
     </div>
     <div class="help-notes">
       <div><b>断点续传</b><p>重新接收时选择同一个保存文件夹，程序会读取 <code>.flashdrop</code> 中的分片状态并自动继续。传输成功后会清理这些内部文件。</p></div>
-      <div><b>连接不上？</b><p>确认两台电脑在同一局域网；在 Windows 防火墙中允许 Python 访问专用网络，或放行控制端口及其后的数据端口。必要时可先临时关闭防火墙测试。</p></div>
+      <div><b>连接不上？</b><p>确认两台电脑在同一 IPv4 局域网。Windows 防火墙允许 Python 访问专用网络；macOS 允许 Python 接受传入连接，并检查「隐私与安全 → 本地网络」。必要时可先临时关闭防火墙测试。</p></div>
+      <div><b>Mac ↔ Windows</b><p>Windows 接收端会自动适配 macOS 的非法文件名、保留名和过长名称，并显示实际保存名。符号链接、扩展属性、可执行权限和 .app 包建议先打 zip 再传。</p></div>
       <div><b>使用边界</b><p>本版本不加密、不认证，只适合可信局域网。浏览器关闭后后端仍会继续运行；关闭启动程序的终端窗口才会中止服务。</p></div>
     </div>
     <div class="dialog-footer">

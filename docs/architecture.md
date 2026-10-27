@@ -31,13 +31,14 @@
 | 组件 | 职责 | 关键点 |
 |---|---|---|
 | `FlashDropApp` | 模式、发送/接收服务门面 | 不允许同时开始发送和接收 |
-| `SenderCatalog` | 文件/文件夹展开、相对路径去重、指纹输入 | 文件 ID 由相对路径决定 |
+| `SenderCatalog` | 文件/文件夹展开、NFC 归一、相对路径去重、指纹输入 | 文件 ID 由 NFC 相对路径决定 |
 | `SendService` | 监听控制端口、接受一个接收方、会话生命周期 | 支持在确认前断开后重新等待 |
 | `SendTransfer` | 分块调度、N 条数据连接、发送进度 | 有界在途窗口 |
-| `ReceiveService` | 连接、清单、保存位置、续传扫描、完成保存 | 只用本机状态验证续传 |
+| `ReceiveService` | 连接、清单、保存位置、Windows 目标名适配、续传扫描、完成保存 | 只用本机状态验证续传 |
 | `ReceiveTransfer` | 数据读线程、文件写入器、完成栅栏 | 每个文件只提交连续前缀 |
+| `naming.py` | NFC、Windows 文件名适配、目标冲突检测 | 清单源路径保持不变 |
 | `ControlChannel` | 长度前缀 JSON、心跳、线程安全发送 | 关闭回调只触发一次 |
-| `picker.py` | 独立进程的 Tk 文件/文件夹窗口 | 不阻塞 Tk 主线程 |
+| `picker.py` | macOS osascript 选择器，其他平台 Tk | 独立进程，不阻塞服务线程 |
 | `web/` | 无构建前端 | 轮询 `/api/state`，分页取文件列表 |
 
 ## 3. 线程模型
@@ -175,18 +176,40 @@ WebUI 不维持 WebSocket；每 650–2600 ms 轮询 `/api/state`，文件列表
 
 `status` 可为 `partial` 或 `done`。但 `scan_resume` 仍然会核对目标文件是否存在、大小是否一致；任何字段不匹配就忽略该记录并从头开始，不删除未知文件。
 
-### 6.2 文件 ID 与指纹
+### 6.2 文件 ID、NFC 与指纹
 
 ```text
-id        = BLAKE2b(relative_path.replace("\\","/").casefold(), digest_size=16).hex()
-quick_hash= SHA-256("flashdrop-qh1" + size + mtime_ns + head(64KiB) + tail(64KiB))
+relative_path = NFC(original_relative_path)      # 线协议只使用 / 分隔
+id            = BLAKE2b(relative_path.casefold(), digest_size=16).hex()
+quick_hash    = SHA-256("flashdrop-qh1" + size + mtime_ns + head(64KiB) + tail(64KiB))
 ```
 
-文件 ID 使用 casefold 是为了让大小写不敏感的 Windows 目标不会出现两个路径碰撞。发送端在创建清单时还会对路径 casefold 去重，必要时加 ` (2)` 后缀。
+- macOS 文件系统常用 NFD，发送端统一转成 NFC，确保 Windows 和 macOS 的“同一个视觉名称”产生相同身份。
+- 文件 ID 使用 casefold 是为了让大小写不敏感的 Windows/macOS 目标不会出现两个路径碰撞。
+- 发送端在创建清单时还会对路径 casefold 去重，必要时加 ` (2)` 后缀。
+- 线协议中反斜杠是普通 POSIX 文件名字符，不是分隔符；Windows 接收端会将其适配为安全名称。
+- 快速指纹不是全文件哈希，设计理由是避免开始传 100 GB 文件前完整读一遍。详见 [decisions.md](decisions.md)。
 
-快速指纹不是全文件哈希，设计理由是避免开始传 100 GB 文件前完整读一遍。详见 [decisions.md](decisions.md)。
+### 6.3 Windows 目标名称适配
 
-### 6.3 接收写入
+清单中的 `rel_path` 保留发送端源名，用于续传匹配和展示；`RemoteFile.destination_rel` 是实际落盘路径。接收端在 `os.name == "nt"` 时通过 `naming.plan_destinations` 生成目标路径：
+
+- 非法字符、控制字符、尾部空格/点替换或清理；
+- Windows 保留设备名避让；
+- 过长组件截短，并附带由源路径派生的稳定短哈希；
+- 同一次清单生成结果必须无大小写/目录前缀冲突，否则拒绝开始；
+- 示例与前缀完整说明见 [compatibility.md](compatibility.md)。
+
+状态文件中的 `path` 始终保存源清单路径，因此 Windows 适配不会破坏续传身份；`done` 文件存在性检查使用当前目标路径。
+
+### 6.4 权限与 mtime
+
+- POSIX 发送端在清单中附带 `mode`（仅 `0o777` rwx 位）。
+- POSIX 接收端在 `os.replace` 后尽力 `os.chmod`；Windows 接收端忽略。
+- 不传输 setuid/setgid/sticky、ACL、扩展属性、资源叉。
+- 文件 mtime 在最终落盘后通过 `os.utime` 尽力恢复；目录权限不处理。
+
+### 6.5 接收写入
 
 `ReceiveFileWriter` 对每个文件维护：
 
@@ -205,7 +228,7 @@ window = max(连接数, min(64, 连接数 * 4))
 
 每个 worker 领取块会占用窗口，发送完释放。窗口满时从条件变量上等待。这样即使一条连接暂时变慢，也不会让接收端无限内存增长。
 
-### 6.4 原子完成
+### 6.6 原子完成
 
 每个文件的最终化步骤：
 
@@ -219,7 +242,7 @@ window = max(连接数, min(64, 连接数 * 4))
 
 只有全部文件成功才发送 `completed ok=true`，并清理本清单对应的状态。若某文件失败，已成功文件保留最终路径和 done 记录；失败文件的 part/状态保留。下次连接同一发送方并选择同一目录时，扫描会跳过已完成文件并继续失败文件。
 
-### 6.5 为什么以文件为单位保存
+### 6.7 为什么以文件为单位保存
 
 不是整次传输成功后才保存：一个 100 GB 的多文件任务如果“全有或全无”，任何末尾错误都会让已接收的大文件全部重来。当前策略尽量保留每个完整文件，同时用连续分片保证半文件也可续传。
 
@@ -232,6 +255,8 @@ window = max(连接数, min(64, 连接数 * 4))
 | 数据块 CRC 错 | 接收端立即失败，不写入该块 |
 | 源文件在发送中改变 | worker 在打开时检查，supervisor 在结束时复查 size/mtime；发送端报错，不发送 all_sent |
 | 接收端磁盘满 / 写失败 | 数据线程错误 → 中止；已完成文件保留 |
+| macOS → Windows 文件名非法 | 接收端自动生成稳定安全名，并在审核页显示；无法消除的冲突会拒绝开始 |
+| 目标路径过长 | Windows 审核页给长路径警告；保存失败时保留分片 |
 | 目标文件被占用/只读 | 最终化失败；整轮报错；分片保留 |
 | 进程崩溃 | `.part` 是连续前缀；状态 JSON 可能缺少最后一次 done 标记，最坏重传该文件 |
 | 接收端在确认前断开 | 发送端回到 listening，继续等待下一个接收方 |
@@ -257,6 +282,7 @@ window = max(连接数, min(64, 连接数 * 4))
 
 ## 9. 扩展建议
 
+- **跨平台元数据**：符号链接、扩展属性/资源叉、ACL 需要新的 manifest 字段与专门的恢复策略；不要把 `mode` 当作完整元数据。
 - **全文件哈希**：在 `ready` 协商中增加可选 hash 字段，完成后接收端校验；需要处理续传时的前缀哈希或改为可恢复的 Merkle/chunk 哈希。
 - **多接收方/广播**：当前单会话模型需要拆分 SendService 的 listener 生命周期和每个接收方的独立 token，属于较大改动。
 - **压缩/加密**：应插在数据帧 payload 层，需同步升级协议版本和数据帧头。
