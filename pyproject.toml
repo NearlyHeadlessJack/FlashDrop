@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flashdrop"
-version = "0.2.2"
+version = "0.2.3"
 description = "FlashDrop / 闪传 — 局域网点对点文件快传，带多端口并行、断点续传和本地 WebUI"
 readme = "README.md"
 requires-python = ">=3.10"
