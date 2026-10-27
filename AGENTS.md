@@ -58,6 +58,7 @@ python3 -m unittest discover -s tests -t . -v
 | `flashdrop/web/` | WebUI（无框架、轮询 `/api/state`） | `docs/development.md` |
 | `flashdrop/picker.py` | macOS osascript / 独立 Tk 选择器 | `docs/compatibility.md`、`docs/decisions.md` |
 | `tests/` | 单元 + 本机双实例端到端 + HTTP/UI 静态检查 | `docs/development.md` |
+| `packaging/` + `.github/workflows/` | PyInstaller 单文件打包（`flashdrop.spec`）与 `v*` 标签发布流水线 | `docs/development.md` 的 Release checklist |
 
 ## 不可破坏的约束
 
@@ -103,7 +104,7 @@ python3 -m unittest discover -s tests -t . -v
 1. `python -m unittest discover -s tests -t . -v` 全绿。
 2. 若改了协议/续传/写盘：额外用两个临时目录跑一次含空文件、大文件、嵌套目录的端到端传输，并比较字节。
 3. 若改了 WebUI/API：`node --check flashdrop/web/app.js`，打开页面确认首屏、发送、接收、错误提示和进度条没有脚本异常。
-4. 若改了打包：`pip install -e .` 或构建 wheel，确认 `web/` 静态资源和 `flashdrop` 入口都进入发行物。
+4. 若改了打包：`pip install -e .` 或构建 wheel，确认 `web/` 静态资源和 `flashdrop` 入口都进入发行物；动了 `packaging/flashdrop.spec` 就本地跑一次 `python -m PyInstaller --clean packaging/flashdrop.spec`，确认单文件版能启动并打开 WebUI。
 5. 文档与实现同步：协议、限制、命令改了就更新对应文档和本文件的“状态与限制”。
 
 ## 文档地图

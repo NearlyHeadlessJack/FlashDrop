@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,7 +17,19 @@ from .errors import UserError
 
 log = logging.getLogger(__name__)
 MAX_REQUEST_BODY = 4 * 1024 * 1024
-STATIC_DIR = Path(__file__).with_name("web")
+
+
+def _static_dir() -> Path:
+    """Locate the WebUI assets, including inside a frozen one-file build."""
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle:
+        candidate = Path(bundle) / "flashdrop" / "web"
+        if candidate.is_dir():
+            return candidate
+    return Path(__file__).with_name("web")
+
+
+STATIC_DIR = _static_dir()
 STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),

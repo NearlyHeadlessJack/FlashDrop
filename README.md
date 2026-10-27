@@ -2,6 +2,26 @@
 
 局域网点对点文件快传工具。文件在两台电脑之间直接传输，不经过云盘。
 
+## 下载
+
+不想装 Python 的话，可以直接用 GitHub Releases 里的单文件版本（推送 `v*` 标签时由 CI 自动构建）：
+
+| 平台 | 文件 |
+|---|---|
+| Windows x64 | `flashdrop-windows-amd64.exe` |
+| macOS Apple 芯片 | `flashdrop-macos-arm64` |
+| macOS Intel | `flashdrop-macos-x86_64` |
+
+Windows 双击即可运行，地址会打印在控制台窗口里。
+
+macOS 下载后需要补上执行权限、去掉隔离属性，否则会被 Gatekeeper 拦下：
+
+```bash
+chmod +x flashdrop-macos-arm64
+xattr -d com.apple.quarantine flashdrop-macos-arm64
+./flashdrop-macos-arm64
+```
+
 ## 启动
 
 要求 Python 3.10 以上，不需要安装第三方依赖。

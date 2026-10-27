@@ -141,8 +141,13 @@ class FlashDropApp:
     def pick(self, kind: str) -> list[str]:
         if kind not in {"files", "folder", "save-dir"}:
             raise UserError("未知的选择类型")
-        script = Path(__file__).with_name("picker.py")
-        command = [sys.executable, str(script), "--kind", kind]
+        if getattr(sys, "frozen", False):
+            # The one-file build is its own interpreter: relaunch it with the
+            # picker flag instead of trying to run picker.py as a script.
+            command = [sys.executable, "--kind", kind]
+        else:
+            script = Path(__file__).with_name("picker.py")
+            command = [sys.executable, str(script), "--kind", kind]
         creationflags = 0
         if os.name == "nt":
             creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)

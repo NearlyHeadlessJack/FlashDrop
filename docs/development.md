@@ -265,3 +265,6 @@ Get-ChildItem flashdrop -Filter *.py | ForEach-Object { python -m py_compile $_.
   `python -m build`（若安装了 build）或 `pip wheel .`。
 - [ ] 在干净环境 `pip install dist/*.whl` 后运行 `flashdrop --no-browser`。
 - [ ] 不把 `tests/_tmp/`、`.flashdrop/`、`artifacts/` 提交到版本库。
+- [ ] 标签名必须与 `flashdrop/__init__.py` 的 `__version__` 一致（如 `v0.2.1`），CI 会校验，不一致直接失败。
+- [ ] 推 `v*` 标签触发 `.github/workflows/release.yml`：构建 Windows amd64、macOS arm64、macOS x86_64 三个单文件可执行程序，并自动创建 release 挂到 assets。
+- [ ] 单文件构建用 `packaging/flashdrop.spec`；新增非 Python 资源（如图片、模板）时同步更新其中的 `datas`，否则发行物里会缺文件。

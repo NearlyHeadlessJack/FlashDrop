@@ -1,4 +1,4 @@
-from .cli import main
+from .launcher import run
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run())

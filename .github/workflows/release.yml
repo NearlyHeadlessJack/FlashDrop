@@ -1,0 +1,141 @@
+name: Release
+
+# 推送 v* 标签时触发：三个平台各打一个单文件可执行程序，然后建 release 并把
+# 产物挂到 assets 上。
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: flashdrop-windows-amd64.exe
+            binary: dist/flashdrop.exe
+            arch: amd64
+          # macos-15 是 arm64（Apple 芯片）
+          - os: macos-15
+            asset: flashdrop-macos-arm64
+            binary: dist/flashdrop
+            arch: arm64
+          # GitHub 现在仅剩的 Intel 镜像；若账号里不可用，可退回 macos-13
+          - os: macos-15-intel
+            asset: flashdrop-macos-x86_64
+            binary: dist/flashdrop
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check tag matches package version
+        shell: python
+        run: |
+          import os
+          import sys
+
+          sys.path.insert(0, os.getcwd())
+          from flashdrop import __version__
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          if tag != f"v{__version__}":
+              print(f"::error::tag {tag} does not match v{__version__} in flashdrop/__init__.py")
+              sys.exit(1)
+          print(f"tag {tag} matches package version {__version__}")
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build single-file executable
+        run: python -m PyInstaller --clean --noconfirm packaging/flashdrop.spec
+
+      - name: Verify architecture
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          file "${{ matrix.binary }}"
+          archs="$(lipo -archs "${{ matrix.binary }}")"
+          echo "lipo: $archs"
+          test "$archs" = "${{ matrix.arch }}"
+
+      - name: Smoke test (version + WebUI assets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "${{ matrix.binary }}" --version
+
+          "${{ matrix.binary }}" --no-browser --port 8765 > server.log 2>&1 &
+          pid=$!
+          ok=0
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8765/api/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 1
+          done
+          cat server.log || true
+          if [ "$ok" -ne 1 ]; then
+            echo "::error::WebUI 没有在 60 秒内就绪"
+            kill "$pid" 2>/dev/null || true
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:8765/ | head -c 120
+          echo
+          kill "$pid" 2>/dev/null || true
+
+      - name: Package asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp "${{ matrix.binary }}" "release/${{ matrix.asset }}"
+          ls -lh "release/${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: release/${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -lh release
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            # 重跑时覆盖已有 release 的产物，而不是整条流水线失败
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release/* \
+              --title "FlashDrop ${GITHUB_REF_NAME}" \
+              --generate-notes \
+              --verify-tag
+          fi
