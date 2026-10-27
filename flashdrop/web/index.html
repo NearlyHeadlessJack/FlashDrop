@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#080c15">
+  <title>闪传 FlashDrop · 局域网点对点快传</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="ambient ambient-a" aria-hidden="true"></div>
+  <div class="ambient ambient-b" aria-hidden="true"></div>
+  <div class="grid-wash" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <button class="brand" id="brand-home" type="button" aria-label="回到首页">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 28 28" fill="none">
+            <path d="M16.8 3.2 6.4 16.1h6.2l-1.4 8.7 10.4-13H15l1.8-8.6Z" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="brand-word">
+          <strong>闪传</strong>
+          <small>FlashDrop</small>
+        </span>
+      </button>
+      <div class="header-actions">
+        <span class="local-chip"><span class="dot"></span>仅在本机运行</span>
+        <button class="text-button header-help" id="btn-help" type="button">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <circle cx="10" cy="10" r="7.4" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M7.9 7.6a2.2 2.2 0 1 1 3.3 1.9c-.8.5-1.2 1-1.2 1.9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <circle cx="10" cy="14.2" r=".9" fill="currentColor"/>
+          </svg>
+          使用说明
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="site-main">
+    <!-- Home -->
+    <section class="view view-home" id="view-home">
+      <div class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="eyebrow-dot"></span>局域网直连 · 文件不经过云端</div>
+          <h1>让大文件，<br><span class="gradient-text">直接飞过去。</span></h1>
+          <p class="hero-lead">在两台电脑之间直接开一条高速通道。多端口并行、自动续传，不用网盘中转，也不用来回插硬盘。</p>
+          <div class="hero-pills">
+            <span><i class="pill-icon">↯</i>多通道并行</span>
+            <span><i class="pill-icon">↺</i>断点续传</span>
+            <span><i class="pill-icon">⌁</i>点对点直连</span>
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <div class="visual-card">
+            <div class="visual-card-top">
+              <span class="visual-label"><span class="mini-dot"></span>P2P SESSION</span>
+              <span class="visual-ready">READY</span>
+            </div>
+            <div class="orbit-stage">
+              <span class="orbit orbit-1"></span>
+              <span class="orbit orbit-2"></span>
+              <span class="orbit orbit-3"></span>
+              <span class="orbit-sweep"></span>
+              <span class="orbit-core">
+                <svg viewBox="0 0 44 44" fill="none">
+                  <path d="M26.5 5 10.2 25.4h9.6L17.7 39l16.4-20.5h-9.7L26.5 5Z" fill="currentColor"/>
+                </svg>
+              </span>
+              <span class="float-file file-a">
+                <span class="mini-file-icon">MP4</span>
+                <span><b>素材原片.mp4</b><small>8.4 GB</small></span>
+              </span>
+              <span class="float-file file-b">
+                <span class="mini-file-icon alt">ZIP</span>
+                <span><b>项目归档.zip</b><small>2.1 GB</small></span>
+              </span>
+              <span class="float-file file-c">
+                <span class="mini-file-icon warm">PSD</span>
+                <span><b>终稿.psd</b><small>640 MB</small></span>
+              </span>
+              <span class="speed-tag"><span>↯</span><b>4×</b> 通道并行</span>
+            </div>
+            <div class="visual-card-bottom">
+              <span class="device-node"><i></i>这台电脑</span>
+              <span class="beam"><i></i><i></i><i></i></span>
+              <span class="device-node right"><i></i>另一台电脑</span>
+            </div>
+          </div>
+          <div class="visual-shadow"></div>
+        </div>
+      </div>
+
+      <div class="mode-grid">
+        <button class="mode-card mode-send" id="btn-mode-send" type="button">
+          <span class="mode-glow"></span>
+          <span class="mode-topline"><span class="mode-index">01</span><span class="mode-arrow">↗</span></span>
+          <span class="mode-icon">
+            <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <path d="M16 22V6m0 0-6 6m6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6 20v3a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="mode-copy">
+            <strong>我要发送</strong>
+            <span>选择本机文件，开启一条等待对方接入的发送通道。</span>
+          </span>
+          <span class="mode-footer"><span>发送文件 / 文件夹</span><span class="mode-cta">开始 <i>→</i></span></span>
+        </button>
+
+        <button class="mode-card mode-receive" id="btn-mode-receive" type="button">
+          <span class="mode-glow"></span>
+          <span class="mode-topline"><span class="mode-index">02</span><span class="mode-arrow">↙</span></span>
+          <span class="mode-icon">
+            <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <path d="M16 6v16m0 0 6-6m-6 6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6 20v3a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="mode-copy">
+            <strong>我要接收</strong>
+            <span>输入发送方的地址，确认文件和保存位置后开始接收。</span>
+          </span>
+          <span class="mode-footer"><span>连接发送方</span><span class="mode-cta">接入 <i>→</i></span></span>
+        </button>
+      </div>
+
+      <div class="feature-strip">
+        <article class="feature">
+          <span class="feature-icon">
+            <svg viewBox="0 0 22 22" fill="none"><path d="M4 6h14M4 11h14M4 16h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="17" cy="16" r="2.4" stroke="currentColor" stroke-width="1.4"/></svg>
+          </span>
+          <div><h3>多端口并行</h3><p>控制与数据分离，多条数据通道同时拉满带宽。</p></div>
+        </article>
+        <article class="feature">
+          <span class="feature-icon">
+            <svg viewBox="0 0 22 22" fill="none"><path d="M17.2 8.4A6.3 6.3 0 0 0 5.4 6.7L4 8.4m0 0V4.1m0 4.3h4.3M4.8 13.6a6.3 6.3 0 0 0 11.8 1.7l1.4-1.7m0 0v4.3m0-4.3h-4.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <div><h3>可靠续传</h3><p>数据块 CRC 校验，中断后从已保存的位置继续。</p></div>
+        </article>
+        <article class="feature">
+          <span class="feature-icon">
+            <svg viewBox="0 0 22 22" fill="none"><rect x="3" y="5" width="16" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 19h6M11 15v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="m7 9 2 2-2 2m5-4h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <div><h3>本地 WebUI</h3><p>熟悉的浏览器界面，文件选择与进度一目了然。</p></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Send -->
+    <section class="view view-send" id="view-send" hidden>
+      <div class="page-heading">
+        <div class="heading-topline">
+          <button class="back-button" id="send-back" type="button"><span>←</span>返回</button>
+          <span class="page-pill" id="send-page-pill">发送模式</span>
+        </div>
+        <div class="heading-row">
+          <div>
+            <h1>把文件送出去</h1>
+            <p>选择文件、开启传输，然后把地址告诉另一台电脑。</p>
+          </div>
+          <span class="status-badge tone-neutral" id="send-status-badge"><span></span>待选择</span>
+        </div>
+      </div>
+
+      <div class="workspace-grid" id="send-editor">
+        <section class="panel editor-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="step-label"><i>01</i>添加文件</span>
+              <h2>这次要发送什么？</h2>
+            </div>
+            <span class="panel-count" id="send-editor-count">0 个文件</span>
+          </div>
+
+          <div class="dropzone">
+            <div class="picker-actions">
+              <button class="pick-button" id="btn-pick-files" type="button">
+                <span class="pick-icon">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M7 3.8h6.2L18 8.6v11.1a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19.7V5.3a1.5 1.5 0 0 1 1-1.5Z" stroke="currentColor" stroke-width="1.48"/><path d="M13 3.8v5h5M9 13h6M9 16h4" stroke="currentColor" stroke-width="1.48" stroke-linecap="round"/></svg>
+                </span>
+                <span><strong>选择文件</strong><small>可一次选择多个</small></span>
+              </button>
+              <button class="pick-button" id="btn-pick-folder" type="button">
+                <span class="pick-icon">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M3.8 7.4a1.8 1.8 0 0 1 1.8-1.8h4l1.8 2.1h7a1.8 1.8 0 0 1 1.8 1.8v8.7a1.8 1.8 0 0 1-1.8 1.8H5.6a1.8 1.8 0 0 1-1.8-1.8V7.4Z" stroke="currentColor" stroke-width="1.48"/><path d="M12 17V10.5m0 0-2.5 2.5m2.5-2.5 2.5 2.5" stroke="currentColor" stroke-width="1.48" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <span><strong>选择文件夹</strong><small>保留完整目录结构</small></span>
+              </button>
+            </div>
+            <button class="path-toggle" id="btn-path-toggle" type="button">系统窗口不方便？手动输入路径</button>
+            <div class="path-editor" id="send-path-editor" hidden>
+              <textarea id="send-path-input" rows="3" spellcheck="false" placeholder="每行一个文件或文件夹路径，例如：&#10;D:\视频\项目&#10;D:\文档\说明.pdf"></textarea>
+              <div class="path-editor-actions">
+                <button class="subtle-button" id="btn-path-cancel" type="button">收起</button>
+                <button class="small-primary" id="btn-path-add" type="button">添加路径</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="file-toolbar">
+            <div class="file-summary">
+              <span id="send-file-count">已选 0 个文件</span>
+              <i></i>
+              <span id="send-total-size">共 0 B</span>
+            </div>
+            <button class="toolbar-action" id="btn-send-clear" type="button">清空列表</button>
+          </div>
+
+          <div class="file-empty" id="send-file-empty">
+            <span class="empty-art">
+              <svg viewBox="0 0 58 58" fill="none"><rect x="10" y="13" width="38" height="32" rx="5" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3.5 4"/><path d="M23 30h12M29 24v12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </span>
+            <strong>还没有选择文件</strong>
+            <p>文件越多、越大，越能感受到直连的速度。</p>
+          </div>
+          <div class="file-list" id="send-file-list" aria-live="polite"></div>
+          <button class="load-more" id="send-load-more" type="button" hidden>显示更多</button>
+
+          <div class="inline-alert" id="send-warning" hidden></div>
+
+          <details class="settings" id="send-settings">
+            <summary>
+              <span><svg viewBox="0 0 20 20" fill="none"><path d="M10 3.2v3M10 13.8v3M3.2 10h3M13.8 10h3M5.2 5.2l2.1 2.1M12.7 12.7l2.1 2.1M14.8 5.2l-2.1 2.1M7.3 12.7l-2.1 2.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="10" cy="10" r="2.8" stroke="currentColor" stroke-width="1.4"/></svg>传输设置</span>
+              <small id="send-settings-summary">端口 45870 · 4 条数据通道</small>
+            </summary>
+            <div class="settings-grid">
+              <label class="field">
+                <span>信息传输端口<small>接收方填写这个端口</small></span>
+                <input id="send-port-input" type="number" min="0" max="65535" step="1" inputmode="numeric" value="45870">
+                <em>填 0 自动分配</em>
+              </label>
+              <label class="field">
+                <span>并行数据通道<small>大文件可同时使用多条 TCP 连接</small></span>
+                <select id="send-connections-select">
+                  <option value="1">1 条 · 保守</option>
+                  <option value="2">2 条</option>
+                  <option value="4" selected>4 条 · 推荐</option>
+                  <option value="6">6 条</option>
+                  <option value="8">8 条 · 极限</option>
+                </select>
+              </label>
+            </div>
+          </details>
+
+          <div class="inline-alert error" id="send-error-inline" hidden></div>
+
+          <button class="primary-button wide" id="btn-send-start" type="button" disabled>
+            <span>开启传输</span>
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <p class="fine-print">开启后程序会在本机监听端口，直到接收方完成保存或你停止发送。</p>
+        </section>
+
+        <aside class="side-column">
+          <section class="panel aside-card">
+            <span class="aside-kicker">发送流程</span>
+            <ol class="flow-list">
+              <li><span>1</span><div><b>选择文件</b><p>可继续添加或移除，直到开传前都能调整。</p></div></li>
+              <li><span>2</span><div><b>开启传输</b><p>后端监听控制端口和多条数据端口。</p></div></li>
+              <li><span>3</span><div><b>告知地址</b><p>把界面上的本机 IP 和控制端口发给对方。</p></div></li>
+              <li><span>4</span><div><b>等待确认</b><p>对方确认保存位置后，传输才正式开始。</p></div></li>
+            </ol>
+          </section>
+          <section class="panel aside-card tone-card">
+            <span class="aside-kicker">本机提示</span>
+            <p class="aside-note">请在两台电脑上保持此程序运行，并允许 Windows 防火墙访问 Python。文件不会上传到任何服务器。</p>
+            <div class="aside-meta"><span>本地控制台</span><b>127.0.0.1</b></div>
+          </section>
+        </aside>
+      </div>
+
+      <div class="session-grid" id="send-live" hidden>
+        <section class="panel session-panel">
+          <div class="session-heading">
+            <span class="status-orb is-live" id="send-orb"><i></i></span>
+            <div class="session-heading-copy">
+              <span class="session-kicker" id="send-live-kicker">发送通道已开启</span>
+              <h2 id="send-live-title">等待接收方连接</h2>
+              <p id="send-live-desc">把下面的地址告诉对方，在另一台电脑选择「我要接收」。</p>
+            </div>
+            <span class="peer-chip" id="send-peer-chip" hidden><span></span><b id="send-peer">对方已连接</b></span>
+          </div>
+
+          <div class="share-block" id="send-share">
+            <div class="address-main-row">
+              <div class="address-main-copy">
+                <span class="address-label">接收方填写这个地址</span>
+                <div class="address-line">
+                  <strong id="send-primary-ip">—</strong>
+                  <span class="port-tag">端口 <b id="send-primary-port">—</b></span>
+                </div>
+              </div>
+              <button class="copy-button" id="btn-copy-address" type="button">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="7" y="7" width="9" height="9" rx="1.7" stroke="currentColor" stroke-width="1.4"/><path d="M13 7V5.7A1.7 1.7 0 0 0 11.3 4H5.7A1.7 1.7 0 0 0 4 5.7v5.6A1.7 1.7 0 0 0 5.7 13H7" stroke="currentColor" stroke-width="1.4"/></svg>
+                复制地址
+              </button>
+            </div>
+            <div class="share-details">
+              <div class="share-detail-block">
+                <span class="detail-label">其他本机地址</span>
+                <div class="address-chips" id="send-address-list"></div>
+              </div>
+              <details class="port-details">
+                <summary>数据端口 <b id="send-data-port-count">0</b> 条</summary>
+                <div class="port-list" id="send-data-port-list"></div>
+              </details>
+            </div>
+            <p class="share-hint">如果对方连不上，请改用上方的其他地址。虚拟网卡或 VPN 地址可能无法从对方电脑访问。</p>
+          </div>
+
+          <div class="waiting-note" id="send-waiting-note">
+            <span class="waiting-pulse"></span>
+            <p id="send-waiting-text">监听中…等待对方发起连接</p>
+            <small>连接前不会传输任何文件</small>
+          </div>
+
+          <div class="progress-block" id="send-progress" hidden>
+            <div class="progress-topline">
+              <div class="percent-wrap"><strong id="send-progress-percent">0</strong><span>%</span></div>
+              <div class="progress-copy">
+                <span>总体进度</span>
+                <b id="send-progress-bytes">0 B / 0 B</b>
+              </div>
+              <span class="phase-chip" id="send-phase-chip"><i></i>传输中</span>
+            </div>
+            <div class="progress-track" id="send-progress-track" role="progressbar" aria-label="发送进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="progress-fill" id="send-progress-fill"></span></div>
+            <div class="progress-stats">
+              <div><span>实时速度</span><b id="send-speed">—</b></div>
+              <div><span>剩余时间</span><b id="send-eta">估算中</b></div>
+              <div><span>已用时间</span><b id="send-elapsed">0 秒</b></div>
+              <div><span>数据通道</span><b id="send-connections">0 条</b></div>
+            </div>
+            <div class="resume-line" id="send-resume-line" hidden><span>↺</span><b>已续传 <em id="send-resume-bytes">0 B</em></b><small>本次只需发送剩余部分</small></div>
+          </div>
+
+          <div class="result-block" id="send-result" hidden>
+            <span class="result-icon" id="send-result-icon"></span>
+            <h3 id="send-result-title">传输完成</h3>
+            <p id="send-result-desc"></p>
+            <div class="result-meta" id="send-result-meta"></div>
+          </div>
+
+          <div class="session-actions">
+            <button class="danger-quiet" id="btn-send-stop" type="button">停止发送</button>
+            <button class="primary-button" id="btn-send-reset" type="button" hidden>调整文件</button>
+          </div>
+        </section>
+
+        <aside class="side-column">
+          <section class="panel aside-card live-summary">
+            <span class="aside-kicker">本次发送</span>
+            <div class="big-stat"><strong id="send-live-files">0</strong><span>个文件</span></div>
+            <div class="summary-row"><span>总大小</span><b id="send-live-size">0 B</b></div>
+            <div class="summary-row"><span>续传数据</span><b id="send-live-resume">无</b></div>
+            <div class="summary-separator"></div>
+            <div class="summary-row"><span>控制端口</span><b id="send-live-port">—</b></div>
+            <div class="summary-row"><span>监听地址</span><b id="send-live-address">—</b></div>
+          </section>
+          <section class="panel aside-card tip-card">
+            <span class="aside-kicker">连接提示</span>
+            <p>若对方连不上，请确认两台电脑在同一局域网，并检查 Windows 防火墙是否允许 Python 或对应的控制端口。</p>
+          </section>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Receive -->
+    <section class="view view-receive" id="view-receive" hidden>
+      <div class="page-heading">
+        <div class="heading-topline">
+          <button class="back-button" id="receive-back" type="button"><span>←</span>返回</button>
+          <span class="page-pill receive-pill">接收模式</span>
+        </div>
+        <div class="heading-row">
+          <div>
+            <h1>把文件接过来</h1>
+            <p>输入发送方的地址，确认清单与保存位置，再开始接收。</p>
+          </div>
+          <span class="status-badge tone-neutral" id="receive-status-badge"><span></span>未连接</span>
+        </div>
+      </div>
+
+      <div class="workspace-grid" id="receive-connect-panel">
+        <section class="panel editor-panel connect-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="step-label receive-step"><i>01</i>建立连接</span>
+              <h2>发送方在哪里？</h2>
+            </div>
+          </div>
+          <form class="connect-form" id="receive-connect-form" novalidate>
+            <label class="field">
+              <span>发送方主机地址<small>IP 或主机名；也可以直接粘贴 IP:端口</small></span>
+              <input id="receive-host-input" type="text" autocomplete="off" spellcheck="false" placeholder="192.168.1.23:45870">
+            </label>
+            <label class="field">
+              <span>信息传输端口<small>发送端界面显示的控制端口</small></span>
+              <input id="receive-port-input" type="number" min="1" max="65535" step="1" inputmode="numeric" value="45870">
+            </label>
+            <div class="inline-alert error" id="receive-connect-error" hidden></div>
+            <button class="primary-button wide" id="btn-receive-connect" type="submit">
+              <span>尝试连接</span>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </form>
+          <div class="connect-hint">
+            <span>在发送端点击「开启传输」后，界面会显示本机 IP 和控制端口。</span>
+          </div>
+        </section>
+
+        <aside class="side-column">
+          <section class="panel aside-card">
+            <span class="aside-kicker">接收流程</span>
+            <ol class="flow-list receive-flow">
+              <li><span>1</span><div><b>连接发送方</b><p>先接入，不会立即开始传输。</p></div></li>
+              <li><span>2</span><div><b>确认文件</b><p>查看对方准备发送的文件与总大小。</p></div></li>
+              <li><span>3</span><div><b>选择位置</b><p>选好后自动识别是否有可续传分片。</p></div></li>
+              <li><span>4</span><div><b>开始接收</b><p>确认后才建立数据通道并写入磁盘。</p></div></li>
+            </ol>
+          </section>
+          <section class="panel aside-card tone-card">
+            <span class="aside-kicker">安全提示</span>
+            <p class="aside-note">本版本专注速度与可靠性，不提供加密或身份认证。请只在可信局域网中使用。</p>
+          </section>
+        </aside>
+      </div>
+
+      <div class="session-grid" id="receive-live" hidden>
+        <section class="panel session-panel">
+          <div class="session-heading">
+            <span class="status-orb is-live" id="receive-orb"><i></i></span>
+            <div class="session-heading-copy">
+              <span class="session-kicker" id="receive-live-kicker">接收通道</span>
+              <h2 id="receive-live-title">正在连接发送方…</h2>
+              <p id="receive-live-desc">正在读取对方的文件清单。</p>
+            </div>
+            <span class="peer-chip" id="receive-peer-chip" hidden><span></span><b id="receive-peer">已连接</b></span>
+          </div>
+
+          <div id="receive-connecting-actions" class="session-actions" hidden>
+            <button class="danger-quiet" id="btn-receive-connect-cancel" type="button">取消连接</button>
+          </div>
+
+          <div class="receive-review" id="receive-review" hidden>
+            <div class="sender-summary">
+              <span class="sender-avatar"><svg viewBox="0 0 24 24" fill="none"><rect x="3.2" y="5.2" width="17.6" height="11.4" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M9 20h6M12 16.6V20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+              <div class="sender-summary-copy">
+                <span>发送方</span>
+                <strong id="receive-sender-label">已连接</strong>
+              </div>
+              <div class="sender-summary-stats">
+                <div><span>文件</span><b id="receive-manifest-count">0</b></div>
+                <div><span>总大小</span><b id="receive-manifest-size">0 B</b></div>
+              </div>
+            </div>
+
+            <div class="save-section">
+              <div class="section-title">
+                <div><span class="step-label receive-step"><i>02</i>保存位置</span><h3>文件放在哪里？</h3></div>
+                <span class="free-space" id="receive-free-space"></span>
+              </div>
+              <div class="save-input-row">
+                <input id="receive-save-input" type="text" spellcheck="false" placeholder="选择一个本机文件夹">
+                <button class="subtle-button" id="btn-receive-choose-dir" type="button">选择文件夹</button>
+                <button class="small-primary" id="btn-receive-apply-dir" type="button">应用路径</button>
+              </div>
+              <div class="resume-notice" id="receive-resume-notice" hidden><span>↺</span><p></p></div>
+              <div class="inline-alert error" id="receive-review-error" hidden></div>
+            </div>
+
+            <div class="receive-files-section">
+              <div class="section-title">
+                <div><span class="step-label receive-step"><i>03</i>文件清单</span><h3>对方准备发送</h3></div>
+                <span class="panel-count" id="receive-file-summary">0 个文件</span>
+              </div>
+              <div class="file-list receive-list" id="receive-file-list" aria-live="polite"></div>
+              <button class="load-more" id="receive-load-more" type="button" hidden>显示更多</button>
+            </div>
+
+            <div class="receive-start-bar">
+              <div class="start-hint"><span>开始后，发送端才会真正发送文件。</span><small>已存在的续传分片会自动接上。</small></div>
+              <div class="button-row">
+                <button class="danger-quiet" id="btn-receive-cancel" type="button">取消</button>
+                <button class="primary-button" id="btn-receive-start" type="button" disabled>开始接收</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="progress-block receive-progress" id="receive-progress" hidden>
+            <div class="progress-topline">
+              <div class="percent-wrap"><strong id="receive-progress-percent">0</strong><span>%</span></div>
+              <div class="progress-copy">
+                <span>总体进度</span>
+                <b id="receive-progress-bytes">0 B / 0 B</b>
+              </div>
+              <span class="phase-chip" id="receive-phase-chip"><i></i>接收中</span>
+            </div>
+            <div class="progress-track" id="receive-progress-track" role="progressbar" aria-label="接收进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="progress-fill receive-fill" id="receive-progress-fill"></span></div>
+            <div class="progress-stats">
+              <div><span>实时速度</span><b id="receive-speed">—</b></div>
+              <div><span>剩余时间</span><b id="receive-eta">估算中</b></div>
+              <div><span>已用时间</span><b id="receive-elapsed">0 秒</b></div>
+              <div><span>数据通道</span><b id="receive-connections">0 条</b></div>
+            </div>
+            <div class="resume-line receive-resume-line" id="receive-resume-line" hidden><span>↺</span><b>已续传 <em id="receive-resume-bytes">0 B</em></b><small>无需重新传输</small></div>
+            <div class="receive-transfer-note">
+              <span class="save-dir-chip" id="receive-save-chip"></span>
+              <button class="danger-quiet compact" id="btn-receive-abort" type="button">取消接收</button>
+            </div>
+          </div>
+
+          <div class="result-block" id="receive-result" hidden>
+            <span class="result-icon" id="receive-result-icon"></span>
+            <h3 id="receive-result-title">接收完成</h3>
+            <p id="receive-result-desc"></p>
+            <div class="result-meta" id="receive-result-meta"></div>
+            <div class="result-actions">
+              <button class="primary-button" id="btn-receive-reset" type="button">接收新的文件</button>
+            </div>
+          </div>
+        </section>
+
+        <aside class="side-column">
+          <section class="panel aside-card live-summary">
+            <span class="aside-kicker">本次接收</span>
+            <div class="big-stat"><strong id="receive-live-files">0</strong><span>个文件</span></div>
+            <div class="summary-row"><span>发送方</span><b id="receive-live-sender">—</b></div>
+            <div class="summary-row"><span>总大小</span><b id="receive-live-size">0 B</b></div>
+            <div class="summary-row"><span>保存位置</span><b id="receive-live-save">未选择</b></div>
+            <div class="summary-separator"></div>
+            <div class="summary-row"><span>已续传</span><b id="receive-live-resume">无</b></div>
+            <div class="summary-row"><span>当前阶段</span><b id="receive-live-state">已连接</b></div>
+          </section>
+          <section class="panel aside-card tip-card">
+            <span class="aside-kicker">断点续传</span>
+            <p>中断后重新连接，并选择同一个保存文件夹，程序会自动核对文件指纹并跳过已经保存的字节。</p>
+          </section>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <span><b>FlashDrop</b> <span id="footer-version">v0.1.0</span></span>
+      <span>本地 P2P · 无云端中转 · 数据由你掌控</span>
+    </div>
+  </footer>
+
+  <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
+
+  <dialog class="help-dialog" id="help-dialog">
+    <div class="dialog-head">
+      <div>
+        <span class="eyebrow"><span class="eyebrow-dot"></span>QUICK GUIDE</span>
+        <h2>两步，把文件送过去</h2>
+      </div>
+      <button class="dialog-close" id="btn-help-close" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="help-grid">
+      <article>
+        <span class="help-number">01</span>
+        <h3>发送端</h3>
+        <ol>
+          <li>选择文件或文件夹，检查清单。</li>
+          <li>点击「开启传输」，程序开始监听。</li>
+          <li>把界面上的本机 IP 和控制端口告诉对方。</li>
+          <li>对方确认保存位置后，传输自动开始。</li>
+        </ol>
+      </article>
+      <article>
+        <span class="help-number">02</span>
+        <h3>接收端</h3>
+        <ol>
+          <li>选择「我要接收」，填写发送方地址与端口。</li>
+          <li>连接后查看文件数量与大小。</li>
+          <li>在系统窗口选择保存文件夹。</li>
+          <li>点击「开始接收」，等待校验完成。</li>
+        </ol>
+      </article>
+    </div>
+    <div class="help-notes">
+      <div><b>断点续传</b><p>重新接收时选择同一个保存文件夹，程序会读取 <code>.flashdrop</code> 中的分片状态并自动继续。传输成功后会清理这些内部文件。</p></div>
+      <div><b>连接不上？</b><p>确认两台电脑在同一局域网；在 Windows 防火墙中允许 Python 访问专用网络，或放行控制端口及其后的数据端口。必要时可先临时关闭防火墙测试。</p></div>
+      <div><b>使用边界</b><p>本版本不加密、不认证，只适合可信局域网。浏览器关闭后后端仍会继续运行；关闭启动程序的终端窗口才会中止服务。</p></div>
+    </div>
+    <div class="dialog-footer">
+      <span>文件只在本机与对方之间传输，不经过任何第三方服务器。</span>
+      <button class="primary-button compact" id="btn-help-done" type="button">开始使用</button>
+    </div>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>

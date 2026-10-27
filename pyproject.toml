@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flashdrop"
+version = "0.1.0"
+description = "FlashDrop / 闪传 — 局域网点对点文件快传，带多端口并行、断点续传和本地 WebUI"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+authors = [{ name = "FlashDrop contributors" }]
+keywords = ["file-transfer", "p2p", "lan", "resume", "webui"]
+classifiers = [
+  "Environment :: Web Environment",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Communications :: File Sharing",
+]
+
+[project.scripts]
+flashdrop = "flashdrop.cli:main"
+
+[tool.setuptools]
+packages = ["flashdrop"]
+
+[tool.setuptools.package-data]
+flashdrop = ["web/*"]
+
+[tool.pytest.ini_options]
+# The project uses unittest, but this keeps pytest users on the same suite.
+testpaths = ["tests"]

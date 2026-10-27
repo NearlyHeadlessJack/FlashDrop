@@ -3,6 +3,13 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# FlashDrop local state, test scratch space, and local UI artifacts
+.flashdrop/
+tests/_tmp/
+artifacts/
+.venv/
+venv/
+
 # C extensions
 *.so
 
