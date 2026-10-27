@@ -110,7 +110,7 @@ Python 格式：`struct.Struct("!4s16sQII")`，头长 36 字节。
   "type": "hello",
   "protocol": 1,
   "app": "flashdrop",
-  "app_version": "0.2.0"
+  "app_version": "0.2.1"
 }
 ```
 
@@ -123,7 +123,7 @@ Python 格式：`struct.Struct("!4s16sQII")`，头长 36 字节。
   "type": "welcome",
   "protocol": 1,
   "app": "flashdrop",
-  "app_version": "0.2.0",
+  "app_version": "0.2.1",
   "session_id": "32-hex",
   "data_token": "32-hex",
   "data_ports": [45871, 45872, 45873, 45874],
