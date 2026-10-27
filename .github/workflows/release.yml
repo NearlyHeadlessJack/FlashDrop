@@ -2,16 +2,24 @@ name: Release
 
 # 推送 v* 标签时触发：三个平台各打一个单文件可执行程序，然后建 release 并把
 # 产物挂到 assets 上。
+#
+# 支持手动重跑（Actions 页面 Run workflow，填一个已存在的标签），用于调试
+# 流水线而不必每次递增版本号。
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布或重跑的标签（必须已存在，如 v0.2.2）"
+        required: true
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -38,6 +46,8 @@ jobs:
             arch: x86_64
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
 
       - uses: actions/setup-python@v5
         with:
@@ -45,6 +55,8 @@ jobs:
 
       - name: Check tag matches package version
         shell: python
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           import os
           import sys
@@ -52,7 +64,7 @@ jobs:
           sys.path.insert(0, os.getcwd())
           from flashdrop import __version__
 
-          tag = os.environ["GITHUB_REF_NAME"]
+          tag = os.environ["TAG"]
           if tag != f"v{__version__}":
               print(f"::error::tag {tag} does not match v{__version__} in flashdrop/__init__.py")
               sys.exit(1)
@@ -74,27 +86,51 @@ jobs:
           echo "lipo: $archs"
           test "$archs" = "${{ matrix.arch }}"
 
-      - name: Smoke test (version + WebUI assets)
+      # 用一个随机端口启动，再从日志里读出实际 URL：避免 8765 被占用导致
+      # 客户端连错端口，也避免进程早早退出时只是干等超时。
+      - name: Smoke test (start server, probe WebUI)
         shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
         run: |
-          set -euo pipefail
-          "${{ matrix.binary }}" --version
+          set -uo pipefail
+          BIN="${{ matrix.binary }}"
 
-          "${{ matrix.binary }}" --no-browser --port 8765 > server.log 2>&1 &
+          "$BIN" --version || { echo "::error::--version 执行失败"; exit 1; }
+
+          rm -f server.log
+          "$BIN" --no-browser --port 0 > server.log 2>&1 &
           pid=$!
-          ok=0
-          for _ in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:8765/api/health >/dev/null 2>&1; then ok=1; break; fi
+
+          ready=0
+          url=""
+          for i in $(seq 1 120); do
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "::error::FlashDrop 进程在第 ${i} 秒就退出了，没等到 WebUI 就绪"
+              break
+            fi
+            url="$(grep -oE 'http://127\.0\.0\.1:[0-9]+/' server.log 2>/dev/null | head -n 1 || true)"
+            if [ -n "$url" ] && python -c "import sys,urllib.request; urllib.request.urlopen(sys.argv[1] + 'api/health', timeout=3).read()" "$url" 2>/dev/null; then
+              ready=1
+              break
+            fi
             sleep 1
           done
-          cat server.log || true
-          if [ "$ok" -ne 1 ]; then
-            echo "::error::WebUI 没有在 60 秒内就绪"
+
+          if [ "$ready" -ne 1 ]; then
+            echo "::error::WebUI 在 120 秒内没有就绪"
+            echo "---- server.log ----"
+            cat server.log 2>/dev/null || true
+            echo "---- listening ports ----"
+            (netstat -ano 2>/dev/null || true) | grep -i listen | head -n 20 || true
+            echo "---- processes ----"
+            (ps -ef 2>/dev/null || true) | grep -i flashdrop | grep -v grep | head -n 5 || true
             kill "$pid" 2>/dev/null || true
             exit 1
           fi
-          curl -fsS http://127.0.0.1:8765/ | head -c 120
-          echo
+
+          echo "WebUI ready at ${url}"
+          python -c "import sys,urllib.request; print(urllib.request.urlopen(sys.argv[1], timeout=5).read(160).decode('utf-8','replace'))" "$url"
           kill "$pid" 2>/dev/null || true
 
       - name: Package asset
@@ -128,14 +164,15 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+          if gh release view "$TAG" >/dev/null 2>&1; then
             # 重跑时覆盖已有 release 的产物，而不是整条流水线失败
-            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+            gh release upload "$TAG" release/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" release/* \
-              --title "FlashDrop ${GITHUB_REF_NAME}" \
+            gh release create "$TAG" release/* \
+              --title "FlashDrop ${TAG}" \
               --generate-notes \
               --verify-tag
           fi
