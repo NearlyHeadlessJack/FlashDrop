@@ -98,7 +98,9 @@
 
   function schedulePoll() {
     if (app.pollTimer) window.clearTimeout(app.pollTimer);
-    const delay = document.hidden ? 2600 : (app.data && app.data.busy ? 650 : 1200);
+    // Background tabs can wait much longer; a visible transfer still updates
+    // at roughly once per second, matching the sender's progress interval.
+    const delay = document.hidden ? 5000 : (app.data && app.data.busy ? 1000 : 2500);
     app.pollTimer = window.setTimeout(() => refreshState(), delay);
   }
 
@@ -155,23 +157,23 @@
     const data = app.data;
     const mode = data.mode || "home";
     document.title = mode === "send" ? "发送 · 闪传 FlashDrop" : mode === "receive" ? "接收 · 闪传 FlashDrop" : "闪传 FlashDrop · 局域网点对点快传";
-    $("view-home").hidden = mode !== "home";
-    $("view-send").hidden = mode !== "send";
-    $("view-receive").hidden = mode !== "receive";
-    $("footer-version").textContent = `v${data.version || "0.1.0"}`;
+    for (const [viewMode, view] of [["home", "view-home"], ["send", "view-send"], ["receive", "view-receive"]]) {
+      const element = $(view);
+      const shouldHide = mode !== viewMode;
+      if (element.hidden !== shouldHide) element.hidden = shouldHide;
+    }
+    setText("footer-version", `v${data.version || "0.1.0"}`);
     renderHeader(mode);
     if (mode === "send") renderSend(data.send);
     if (mode === "receive") renderReceive(data.receive);
     if (mode !== app.lastMode) {
       app.lastMode = mode;
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: "auto" });
     }
   }
 
   function renderHeader(mode) {
-    const helpButton = $("btn-help");
-    if (!helpButton) return;
-    document.body.dataset.mode = mode;
+    if (document.body.dataset.mode !== mode) document.body.dataset.mode = mode;
   }
 
   function phaseInfo(table, status) {
@@ -179,11 +181,18 @@
   }
 
   function paintStatusBadge(element, label, tone) {
+    const signature = `${tone}\u0000${label}`;
+    if (element.dataset.signature === signature) return;
     element.className = `status-badge tone-${tone}`;
     element.innerHTML = "";
     const dot = document.createElement("span");
+    dot.className = "status-dot";
     dot.setAttribute("aria-hidden", "true");
-    element.append(dot, document.createTextNode(label));
+    const text = document.createElement("span");
+    text.className = "status-text";
+    text.textContent = label;
+    element.append(dot, text);
+    element.dataset.signature = signature;
   }
 
   function setText(id, value) {
@@ -197,11 +206,6 @@
     const element = $(id);
     if (!element) return;
     element.innerHTML = html;
-  }
-
-  function toggle(id, visible) {
-    const element = $(id);
-    if (element) element.hidden = !visible;
   }
 
   function escapeHtml(value) {
@@ -279,12 +283,15 @@
   function setProgressBar(fillId, percentId, progress) {
     const percent = progressPercent(progress);
     const fill = $(fillId);
-    fill.style.width = `${percent}%`;
+    const width = `${percent}%`;
+    if (fill.style.width !== width) fill.style.width = width;
     setText(percentId, percent >= 100 ? "100" : percent.toFixed(1));
     const track = fill.parentElement;
     if (track) {
-      track.setAttribute("aria-valuenow", percent.toFixed(0));
-      track.setAttribute("aria-valuetext", `${percent.toFixed(1)}%`);
+      const value = percent.toFixed(0);
+      const text = `${percent.toFixed(1)}%`;
+      if (track.getAttribute("aria-valuenow") !== value) track.setAttribute("aria-valuenow", value);
+      if (track.getAttribute("aria-valuetext") !== text) track.setAttribute("aria-valuetext", text);
     }
   }
 
@@ -301,18 +308,31 @@
     const block = $(blockId);
     block.hidden = false;
     block.classList.toggle("error", options.tone === "error");
+    const signature = JSON.stringify([
+      options.tone,
+      options.icon,
+      options.title,
+      options.desc || "",
+      options.meta || [],
+    ]);
+    if (block.dataset.signature === signature) return;
     setHtml(iconId, iconMarkup(options.icon));
     setText(titleId, options.title);
     setText(descId, options.desc || "");
     setMeta($(metaId), options.meta || []);
+    block.dataset.signature = signature;
   }
 
-  function hideAllSessionBlocks(prefix) {
-    if (prefix === "send") {
-      ["send-share", "send-waiting-note", "send-progress", "send-result"].forEach((id) => toggle(id, false));
-    } else {
-      ["receive-review", "receive-progress", "receive-result", "receive-connecting-actions"].forEach((id) => toggle(id, false));
-    }
+  function setSessionBlocks(prefix, activeIds) {
+    const ids = prefix === "send"
+      ? ["send-share", "send-waiting-note", "send-progress", "send-result"]
+      : ["receive-review", "receive-progress", "receive-result", "receive-connecting-actions"];
+    const active = new Set(activeIds);
+    ids.forEach((id) => {
+      const element = $(id);
+      const shouldHide = !active.has(id);
+      if (element && element.hidden !== shouldHide) element.hidden = shouldHide;
+    });
   }
 
   // ------------------------------------------------------------------
@@ -376,7 +396,15 @@
     if (send.peer) setText("send-peer", send.peer);
     else if (peerConnected) setText("send-peer", "接收方已连接");
 
-    hideAllSessionBlocks("send");
+    if (status === "preparing") {
+      setSessionBlocks("send", ["send-waiting-note"]);
+    } else if (["listening", "negotiating"].includes(status)) {
+      setSessionBlocks("send", ["send-share", "send-waiting-note"]);
+    } else if (["starting", "transferring", "finishing"].includes(status)) {
+      setSessionBlocks("send", ["send-progress"]);
+    } else {
+      setSessionBlocks("send", ["send-result"]);
+    }
     $("btn-send-stop").hidden = !["preparing", "listening", "negotiating", "starting", "transferring", "finishing"].includes(status);
     $("btn-send-reset").hidden = !["completed", "error", "stopped", "cancelled"].includes(status);
     $("btn-send-reset").textContent = status === "completed" ? "发送新内容" : "调整后重试";
@@ -393,42 +421,34 @@
       setText("send-live-kicker", "正在准备发送");
       setText("send-live-title", "读取文件指纹…");
       setText("send-live-desc", "正在检查文件大小与续传指纹，很快就好。");
-      $("send-waiting-note").hidden = false;
       setText("send-waiting-text", "准备文件清单…");
       $("send-waiting-note").querySelector("small").textContent = "请保持页面开启";
     } else if (status === "listening") {
       setText("send-live-kicker", "发送通道已开启");
       setText("send-live-title", "等待接收方连接");
       setText("send-live-desc", "把下面的地址告诉对方，在另一台电脑选择「我要接收」。");
-      $("send-share").hidden = false;
-      $("send-waiting-note").hidden = false;
       setText("send-waiting-text", "监听中…等待对方发起连接");
       $("send-waiting-note").querySelector("small").textContent = "连接前不会传输任何文件";
     } else if (status === "negotiating") {
       setText("send-live-kicker", "接收方已接入");
       setText("send-live-title", "等待对方确认保存位置");
       setText("send-live-desc", "清单已经送达。对方确认目录后，数据通道才会打开。");
-      $("send-share").hidden = false;
-      $("send-waiting-note").hidden = false;
       setText("send-waiting-text", "对方正在浏览文件清单并选择保存位置…");
       $("send-waiting-note").querySelector("small").textContent = "传输尚未开始";
     } else if (status === "starting") {
       setText("send-live-kicker", "准备传输");
       setText("send-live-title", "正在建立并行数据通道");
       setText("send-live-desc", "接收方已确认，双方正在接通多条 TCP 数据连接。");
-      $("send-progress").hidden = false;
       renderSendProgress(send, "starting");
     } else if (status === "transferring") {
       setText("send-live-kicker", "高速传输中");
       setText("send-live-title", "文件正在飞过去");
       setText("send-live-desc", "请保持两台电脑运行，关闭浏览器不会中断后台传输。");
-      $("send-progress").hidden = false;
       renderSendProgress(send, status);
     } else if (status === "finishing") {
       setText("send-live-kicker", "数据已送达");
       setText("send-live-title", "等待对方校验并保存");
       setText("send-live-desc", "所有字节已发出，接收方正在把文件安全写入磁盘。");
-      $("send-progress").hidden = false;
       renderSendProgress(send, status);
     } else if (status === "completed") {
       setText("send-live-kicker", "发送任务完成");
@@ -472,7 +492,6 @@
       });
     }
 
-    $("send-result").hidden = !["completed", "error", "stopped", "cancelled"].includes(status);
   }
 
   function renderShareAddresses(share, primary) {
@@ -480,32 +499,47 @@
     setText("send-primary-port", share.port);
     setText("send-data-port-count", String((share.data_ports || []).length));
     const addressList = $("send-address-list");
-    addressList.innerHTML = "";
-    const alternatives = (share.addresses || []).filter((ip) => !primary || ip !== primary.ip);
-    alternatives.forEach((ip) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "address-chip";
-      button.textContent = ip;
-      button.title = `复制 ${ip}:${share.port}`;
-      button.addEventListener("click", () => copyText(`${ip}:${share.port}`, `已复制 ${ip}:${share.port}`));
-      addressList.append(button);
-    });
-    if (!alternatives.length) {
-      const label = document.createElement("span");
-      label.className = "address-chip";
-      label.textContent = "无其他地址";
-      addressList.append(label);
+    const addresses = Array.isArray(share.addresses) ? share.addresses : [];
+    const dataPorts = Array.isArray(share.data_ports) ? share.data_ports : [];
+    const alternatives = addresses.filter((ip) => !primary || ip !== primary.ip);
+    const signature = JSON.stringify([primary ? primary.ip : null, share.port, alternatives, dataPorts]);
+    if (addressList.dataset.signature !== signature) {
+      addressList.innerHTML = "";
+      alternatives.forEach((ip) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "address-chip";
+        button.textContent = ip;
+        button.title = `复制 ${ip}:${share.port}`;
+        button.addEventListener("click", () => copyText(`${ip}:${share.port}`, `已复制 ${ip}:${share.port}`));
+        addressList.append(button);
+      });
+      if (!alternatives.length) {
+        const label = document.createElement("span");
+        label.className = "address-chip";
+        label.textContent = "无其他地址";
+        addressList.append(label);
+      }
+      const ports = $("send-data-port-list");
+      ports.innerHTML = "";
+      dataPorts.forEach((port) => {
+        const chip = document.createElement("span");
+        chip.textContent = String(port);
+        ports.append(chip);
+      });
+      addressList.dataset.signature = signature;
     }
-    const ports = $("send-data-port-list");
-    ports.innerHTML = "";
-    (share.data_ports || []).forEach((port) => {
-      const chip = document.createElement("span");
-      chip.textContent = String(port);
-      ports.append(chip);
-    });
     $("btn-copy-address").disabled = !primary;
     $("btn-copy-address").dataset.copyValue = primary ? `${primary.ip}:${share.port}` : "";
+  }
+
+  function setPhaseChip(id, label) {
+    const chip = $(id);
+    if (!chip || chip.dataset.label === label) return;
+    chip.textContent = "";
+    const marker = document.createElement("i");
+    chip.append(marker, document.createTextNode(label));
+    chip.dataset.label = label;
   }
 
   function renderSendProgress(send, status) {
@@ -516,12 +550,14 @@
     setText("send-eta", formatEta(progress, status));
     setText("send-elapsed", formatDuration(progress.elapsed));
     setText("send-connections", `${formatCount(progress.connections || 0)} 条`);
-    const phaseChip = $("send-phase-chip");
-    const label = status === "starting" ? "建立通道" : status === "finishing" ? "校验保存" : "发送中";
-    phaseChip.innerHTML = `<i></i>${label}`;
+    setPhaseChip(
+      "send-phase-chip",
+      status === "starting" ? "建立通道" : status === "finishing" ? "校验保存" : "发送中",
+    );
     const resumeLine = $("send-resume-line");
     const resumed = Number(send.resume && send.resume.bytes) || 0;
-    resumeLine.hidden = !resumed;
+    const hideSendResume = !resumed;
+    if (resumeLine.hidden !== hideSendResume) resumeLine.hidden = hideSendResume;
     if (resumed) setText("send-resume-bytes", formatBytes(resumed));
   }
 
@@ -546,13 +582,18 @@
   function renderSendList() {
     const cache = caches.send;
     if (app.data.mode !== "send" || app.data.send.status !== "idle") return;
-    $("send-file-empty").hidden = cache.items.length > 0;
-    renderFileRows($("send-file-list"), cache.items, "send");
+    const list = $("send-file-list");
+    const renderKey = `${app.data.send.files.revision}:${cache.items.length}:${cache.total}`;
+    if (list.dataset.renderedKey !== renderKey) {
+      $("send-file-empty").hidden = cache.items.length > 0;
+      renderFileRows(list, cache.items, "send");
+      list.dataset.renderedKey = renderKey;
+    }
     const remaining = Math.max(0, cache.total - cache.items.length);
-    $("send-load-more").hidden = remaining <= 0;
-    $("send-load-more").textContent = `显示更多（还有 ${formatCount(remaining)} 个）`;
-    $("send-file-count").textContent = `已选 ${formatCount(app.data.send.files.count)} 个文件`;
-    $("send-total-size").textContent = `共 ${formatBytes(app.data.send.files.total_size)}`;
+    const loadMore = $("send-load-more");
+    if (loadMore.hidden !== (remaining <= 0)) loadMore.hidden = remaining <= 0;
+    const loadText = `显示更多（还有 ${formatCount(remaining)} 个）`;
+    if (loadMore.textContent !== loadText) loadMore.textContent = loadText;
   }
 
   function renderFileRows(container, items, kind) {
@@ -623,11 +664,18 @@
     if (app.data.mode !== "receive" || app.data.receive.status !== "review") return;
     const cache = caches.receive;
     const receive = app.data.receive;
-    renderFileRows($("receive-file-list"), cache.items, "receive");
+    const list = $("receive-file-list");
+    const renderKey = `${receive.manifest.revision}:${cache.items.length}:${cache.total}`;
+    if (list.dataset.renderedKey !== renderKey) {
+      renderFileRows(list, cache.items, "receive");
+      list.dataset.renderedKey = renderKey;
+    }
     setText("receive-file-summary", `${formatCount(receive.manifest.count)} 个文件 · ${formatBytes(receive.manifest.total_size)}`);
     const remaining = Math.max(0, cache.total - cache.items.length);
-    $("receive-load-more").hidden = remaining <= 0;
-    $("receive-load-more").textContent = `显示更多（还有 ${formatCount(remaining)} 个）`;
+    const loadMore = $("receive-load-more");
+    if (loadMore.hidden !== (remaining <= 0)) loadMore.hidden = remaining <= 0;
+    const loadText = `显示更多（还有 ${formatCount(remaining)} 个）`;
+    if (loadMore.textContent !== loadText) loadMore.textContent = loadText;
   }
 
   async function ensureFileList(kind, revision) {
@@ -708,7 +756,15 @@
       setText("receive-peer", receive.peer && receive.peer.address ? `${peerText} · ${receive.peer.address}` : peerText);
     }
 
-    hideAllSessionBlocks("receive");
+    if (status === "connecting") {
+      setSessionBlocks("receive", ["receive-connecting-actions"]);
+    } else if (status === "review") {
+      setSessionBlocks("receive", ["receive-review"]);
+    } else if (["preparing", "starting", "transferring", "verifying"].includes(status)) {
+      setSessionBlocks("receive", ["receive-progress"]);
+    } else {
+      setSessionBlocks("receive", ["receive-result"]);
+    }
     $("btn-receive-abort").hidden = false;
     $("btn-receive-abort").disabled = false;
 
@@ -724,7 +780,6 @@
       setText("receive-live-kicker", "正在接入");
       setText("receive-live-title", "正在连接发送方…");
       setText("receive-live-desc", "正在握手并读取对方的文件清单。");
-      $("receive-connecting-actions").hidden = false;
       app.lastReceiveRevision = null;
       return;
     }
@@ -733,7 +788,6 @@
       setText("receive-live-kicker", "连接成功");
       setText("receive-live-title", "先确认，再开始");
       setText("receive-live-desc", "对方还没有发送文件。选择保存文件夹后，点击「开始接收」。");
-      $("receive-review").hidden = false;
       renderReceiveReview(receive);
       ensureReceiveList(receive.manifest.revision);
       renderReceiveList();
@@ -741,7 +795,6 @@
     }
 
     if (["preparing", "starting", "transferring", "verifying"].includes(status)) {
-      $("receive-progress").hidden = false;
       renderReceiveProgress(receive, status);
       if (status === "preparing") {
         setText("receive-live-kicker", "准备接收");
@@ -825,31 +878,33 @@
     setText("receive-file-summary", `${formatCount(receive.manifest.count)} 个文件 · ${formatBytes(receive.manifest.total_size)}`);
 
     const input = $("receive-save-input");
-    if (receive.save_dir && document.activeElement !== input) {
-      input.value = receive.save_dir;
-    } else if (!receive.save_dir && document.activeElement !== input) {
-      input.value = "";
+    const wantedDir = receive.save_dir || "";
+    if (document.activeElement !== input && input.value !== wantedDir) {
+      input.value = wantedDir;
     }
 
     const resume = receive.resume || {};
     const notice = $("receive-resume-notice");
-    if (resume.files > 0) {
-      notice.hidden = false;
-      notice.querySelector("p").textContent = `发现 ${formatCount(resume.files)} 个可续传文件，可以跳过 ${formatBytes(resume.bytes)}，只接收剩余部分。`;
-    } else if (receive.save_dir) {
-      notice.hidden = false;
-      notice.querySelector("p").textContent = "这个文件夹暂无可续传分片，将从头接收；完成后会清理内部记录。";
-    } else {
-      notice.hidden = true;
-    }
+    const resumeText = resume.files > 0
+      ? `发现 ${formatCount(resume.files)} 个可续传文件，可以跳过 ${formatBytes(resume.bytes)}，只接收剩余部分。`
+      : receive.save_dir
+        ? "这个文件夹暂无可续传分片，将从头接收；完成后会清理内部记录。"
+        : "";
+    const hideResumeNotice = !resumeText;
+    if (notice.hidden !== hideResumeNotice) notice.hidden = hideResumeNotice;
+    const resumeParagraph = notice.querySelector("p");
+    if (resumeParagraph.textContent !== resumeText) resumeParagraph.textContent = resumeText;
 
     const adaptation = receive.path_adaptation || {};
     const renamed = Number(adaptation.renamed) || 0;
     const warnings = Array.isArray(adaptation.warnings) ? adaptation.warnings : [];
     const examples = Array.isArray(adaptation.examples) ? adaptation.examples : [];
     const compatNotice = $("receive-compat-notice");
-    if (renamed > 0 || warnings.length > 0) {
-      compatNotice.hidden = false;
+    const compatSignature = JSON.stringify([renamed, examples, warnings]);
+    const hasCompat = renamed > 0 || warnings.length > 0;
+    const hideCompat = !hasCompat;
+    if (compatNotice.hidden !== hideCompat) compatNotice.hidden = hideCompat;
+    if (hasCompat && compatNotice.dataset.signature !== compatSignature) {
       setText(
         "receive-compat-title",
         renamed > 0 ? `已自动适配 ${formatCount(renamed)} 个 Windows 文件名` : "保存路径兼容性提示",
@@ -875,10 +930,7 @@
         li.textContent = warning;
         warningsEl.append(li);
       });
-    } else {
-      compatNotice.hidden = true;
-      $("receive-compat-examples").innerHTML = "";
-      $("receive-compat-warnings").innerHTML = "";
+      compatNotice.dataset.signature = compatSignature;
     }
 
     const reviewError = $("receive-review-error");
@@ -911,13 +963,21 @@
     setText("receive-eta", formatEta(progress, status));
     setText("receive-elapsed", formatDuration(progress.elapsed));
     setText("receive-connections", `${formatCount(progress.connections || 0)} 条`);
-    const phaseChip = $("receive-phase-chip");
-    if (status === "preparing") phaseChip.innerHTML = "<i></i>核对进度";
-    else if (status === "starting") phaseChip.innerHTML = "<i></i>建立通道";
-    else if (status === "verifying") phaseChip.innerHTML = "<i></i>校验保存";
-    else phaseChip.innerHTML = "<i></i>接收中";
+    setPhaseChip(
+      "receive-phase-chip",
+      status === "preparing"
+        ? "核对进度"
+        : status === "starting"
+          ? "建立通道"
+          : status === "verifying"
+            ? "校验保存"
+            : "接收中",
+    );
     const resumed = Number(receive.resume && receive.resume.bytes) || 0;
-    $("receive-resume-line").hidden = !resumed;
+    const hideReceiveResume = !resumed;
+    if ($("receive-resume-line").hidden !== hideReceiveResume) {
+      $("receive-resume-line").hidden = hideReceiveResume;
+    }
     if (resumed) setText("receive-resume-bytes", formatBytes(resumed));
     setText("receive-save-chip", receive.save_dir || "未选择保存位置");
     $("receive-save-chip").title = receive.save_dir || "";
@@ -1279,7 +1339,7 @@
     $("brand-home").addEventListener("click", () => {
       if (!app.data) return;
       if (app.data.mode === "home") {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        window.scrollTo({ top: 0, behavior: "auto" });
       } else {
         goHome(null);
       }

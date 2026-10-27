@@ -143,7 +143,7 @@ CLI 参数：`--port`、`--no-browser`、`--debug`、`--version`。WebUI 端口�
 ### 4.1 文件与职责
 
 - `index.html`：三个视图（home/send/receive）、帮助对话框、静态 SVG 图标。
-- `style.css`：暗色设计系统、响应式布局、进度动画、`prefers-reduced-motion`。
+- `style.css`：暗色设计系统、响应式布局、轻量静态视觉；除短生命周期 spinner 外不使用持续动画或模糊滤镜。
 - `app.js`：单 IIFE，无模块打包。
 
 ### 4.2 前端状态模型
@@ -155,7 +155,7 @@ caches.send/receive  ← 文件列表分页缓存 {revision, items, total, loadi
 lastSendStatus ...
 ```
 
-轮询间隔在 650–2600 ms 之间变化，页面隐藏时降低频率。文件列表按 `files.revision` / `manifest.revision` 变化重新加载，而不是每次轮询都拉取全量文件。
+轮询间隔为忙碌 1 秒、空闲 2.5 秒、页面隐藏 5 秒。文件列表按 `files.revision` / `manifest.revision` 变化重新加载，而不是每次轮询都拉取全量文件。
 
 ### 4.3 渲染原则
 
@@ -166,6 +166,8 @@ lastSendStatus ...
 - 文件列表最多先显示 120 项，剩余由「显示更多」分页。
 - 接收端文件列表优先使用 `dest_rel`（Windows 实际保存名），并用「名称已适配」标识；`path_adaptation` 决定审核页提示。
 - Mac 字体栈与 Safari 前缀集中在 `style.css` 根变量/相关规则；新增视觉特性前不要依赖只有 Chromium 支持的 CSS。
+- **低渲染开销约束**：保留 `style.css` 末尾的 Lightweight rendering 规则。不要重新引入持续动画、`backdrop-filter`、大范围 `filter: blur`、轨道/粒子装饰或持续触发合成的阴影；交互反馈优先用颜色和边框。唯一允许的持续动画是短生命周期的 spinner。
+- 新增轮询状态渲染时使用 DOM 差异更新/签名缓存，避免每次 poll 重建状态 badge、地址 chips、结果块、文件列表。现有缓存入口：`paintStatusBadge`、`renderShareAddresses`、`showResult`、`setSessionBlocks`。
 - CSP 禁止内联脚本和内联事件处理；不要添加 `onclick` 属性。样式属性通过 JS 修改，CSP 的 `style-src` 已允许内联样式。
 
 ### 4.4 安全/交互注意

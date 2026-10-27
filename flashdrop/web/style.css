@@ -930,17 +930,17 @@ a {
   white-space: nowrap;
 }
 
-.status-badge > span {
+.status-badge > .status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--dim);
 }
 
-.status-badge.tone-busy > span {
+.status-badge.tone-busy > .status-dot {
   background: var(--accent-warm);
   box-shadow: 0 0 0 4px rgba(255, 179, 107, 0.08);
-  animation: soft-pulse 1.8s ease-in-out infinite;
+  animation: none;
 }
 
 .status-badge.tone-good {
@@ -948,9 +948,9 @@ a {
   border-color: rgba(114, 233, 184, 0.18);
 }
 
-.status-badge.tone-good > span {
+.status-badge.tone-good > .status-dot {
   background: var(--success);
-  box-shadow: 0 0 10px rgba(114, 233, 184, 0.5);
+  box-shadow: none;
 }
 
 .status-badge.tone-error {
@@ -958,14 +958,14 @@ a {
   border-color: rgba(255, 129, 139, 0.2);
 }
 
-.status-badge.tone-error > span {
+.status-badge.tone-error > .status-dot {
   background: var(--danger);
 }
 
-.status-badge.tone-receive > span {
+.status-badge.tone-receive > .status-dot {
   background: var(--receive);
-  box-shadow: 0 0 0 4px rgba(120, 220, 255, 0.07);
-  animation: soft-pulse 1.8s ease-in-out infinite;
+  box-shadow: none;
+  animation: none;
 }
 
 .workspace-grid,
@@ -3438,5 +3438,279 @@ textarea {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Lightweight rendering
+   The UI intentionally avoids continuous animation, backdrop filters,
+   blurred decoration, and hover-only compositing. Keep it restrained:
+   the browser should be able to idle without painting frames.
+   ------------------------------------------------------------------ */
+*,
+*::before,
+*::after {
+  transition: none !important;
+}
+
+body {
+  background: #080c14;
+}
+
+.site-header {
+  background: #080c14;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.site-header,
+.toast,
+.help-dialog,
+.help-dialog::backdrop {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.site-header {
+  box-shadow: none;
+}
+
+.view,
+.session-grid,
+.help-dialog[open],
+.toast,
+.toast.is-leaving {
+  animation: none !important;
+}
+
+.status-orb::before,
+.status-orb::after {
+  display: none;
+}
+
+.waiting-pulse,
+.status-badge > .status-dot,
+.phase-chip i {
+  animation: none !important;
+}
+
+.panel,
+.editor-panel,
+.session-panel,
+.mode-card,
+.feature,
+.help-dialog,
+.toast {
+  box-shadow: none;
+}
+
+.panel {
+  background: #0c1420;
+}
+
+.aside-card {
+  background: #0c1420;
+}
+
+.mode-card {
+  background: #0c1420;
+}
+
+.mode-card:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.mode-glow {
+  display: none;
+}
+
+.mode-icon {
+  background: #111b28;
+}
+
+.feature-strip {
+  background: var(--line);
+}
+
+.feature {
+  background: #0b111b;
+}
+
+.primary-button {
+  background: #73e5c3;
+  box-shadow: none;
+}
+
+.primary-button:hover:not(:disabled) {
+  transform: none;
+  filter: none;
+  background: #85efcf;
+}
+
+.brand-mark {
+  box-shadow: none;
+}
+
+.share-block,
+.progress-block,
+.connect-form,
+.sender-summary,
+.waiting-note {
+  background: #0a121d;
+}
+
+.progress-track::after {
+  display: none;
+}
+
+.progress-fill {
+  transition: none;
+  box-shadow: none;
+}
+
+.status-orb {
+  box-shadow: none;
+}
+
+.status-orb i,
+.status-badge > .status-dot,
+.phase-chip i {
+  box-shadow: none;
+}
+
+/* Static hero panel replaces the old animated orbit visual. */
+.hero {
+  min-height: 0;
+  align-items: center;
+  padding-top: 8px;
+  padding-bottom: 30px;
+}
+
+.hero-panel {
+  align-self: center;
+  width: min(100%, 410px);
+  margin-left: auto;
+  padding: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 20px;
+  background: #0c1420;
+}
+
+.hero-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+}
+
+.hero-panel-state {
+  padding: 3px 7px;
+  border: 1px solid rgba(111, 231, 196, 0.2);
+  border-radius: 5px;
+  color: var(--accent);
+  background: transparent;
+  font-size: 8px;
+}
+
+.hero-route {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin: 21px 0;
+}
+
+.hero-node {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0a121d;
+}
+
+.hero-node b {
+  display: block;
+  color: #d9e7f5;
+  font-size: 13px;
+  font-weight: 560;
+}
+
+.hero-node small {
+  display: block;
+  margin-top: 2px;
+  color: var(--dim);
+  font-size: 10px;
+}
+
+.hero-arrow {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 18px;
+}
+
+.hero-facts {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--line);
+}
+
+.hero-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  background: #0a121d;
+  font-size: 10px;
+}
+
+.hero-facts span {
+  color: var(--dim);
+}
+
+.hero-facts b {
+  color: #b9cde0;
+  font-weight: 500;
+}
+
+.hero-panel-note {
+  margin: 14px 0 0;
+  color: var(--dim);
+  font-size: 9px;
+  text-align: center;
+}
+
+.help-dialog {
+  background: #0e1622;
+}
+
+.help-dialog::backdrop {
+  background: rgba(2, 5, 9, 0.8);
+}
+
+.toast {
+  background: #111b28;
+}
+
+@media (max-width: 850px) {
+  .hero-panel {
+    width: min(100%, 520px);
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 680px) {
+  .hero {
+    padding-bottom: 20px;
+  }
+
+  .hero-panel {
+    padding: 18px;
   }
 }

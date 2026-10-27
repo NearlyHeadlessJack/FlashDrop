@@ -10,10 +10,6 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="ambient ambient-a" aria-hidden="true"></div>
-  <div class="ambient ambient-b" aria-hidden="true"></div>
-  <div class="grid-wash" aria-hidden="true"></div>
-
   <header class="site-header">
     <div class="header-inner">
       <button class="brand" id="brand-home" type="button" aria-label="回到首页">
@@ -55,49 +51,33 @@
             <span><i class="pill-icon">⌁</i>点对点直连</span>
           </div>
         </div>
-        <div class="hero-visual" aria-hidden="true">
-          <div class="visual-card">
-            <div class="visual-card-top">
-              <span class="visual-label"><span class="mini-dot"></span>P2P SESSION</span>
-              <span class="visual-ready">READY</span>
+        <aside class="hero-panel" aria-hidden="true">
+          <div class="hero-panel-head">
+            <span>本地直连</span>
+            <span class="hero-panel-state">READY</span>
+          </div>
+          <div class="hero-route">
+            <div class="hero-node">
+              <b>这台电脑</b>
+              <small>选择文件</small>
             </div>
-            <div class="orbit-stage">
-              <span class="orbit orbit-1"></span>
-              <span class="orbit orbit-2"></span>
-              <span class="orbit orbit-3"></span>
-              <span class="orbit-sweep"></span>
-              <span class="orbit-core">
-                <svg viewBox="0 0 44 44" fill="none">
-                  <path d="M26.5 5 10.2 25.4h9.6L17.7 39l16.4-20.5h-9.7L26.5 5Z" fill="currentColor"/>
-                </svg>
-              </span>
-              <span class="float-file file-a">
-                <span class="mini-file-icon">MP4</span>
-                <span><b>素材原片.mp4</b><small>8.4 GB</small></span>
-              </span>
-              <span class="float-file file-b">
-                <span class="mini-file-icon alt">ZIP</span>
-                <span><b>项目归档.zip</b><small>2.1 GB</small></span>
-              </span>
-              <span class="float-file file-c">
-                <span class="mini-file-icon warm">PSD</span>
-                <span><b>终稿.psd</b><small>640 MB</small></span>
-              </span>
-              <span class="speed-tag"><span>↯</span><b>4×</b> 通道并行</span>
-            </div>
-            <div class="visual-card-bottom">
-              <span class="device-node"><i></i>这台电脑</span>
-              <span class="beam"><i></i><i></i><i></i></span>
-              <span class="device-node right"><i></i>另一台电脑</span>
+            <span class="hero-arrow">→</span>
+            <div class="hero-node">
+              <b>另一台电脑</b>
+              <small>确认接收</small>
             </div>
           </div>
-          <div class="visual-shadow"></div>
-        </div>
+          <div class="hero-facts">
+            <div><span>传输方式</span><b>点对点</b></div>
+            <div><span>数据通道</span><b>多路并行</b></div>
+            <div><span>断点续传</span><b>自动</b></div>
+          </div>
+          <p class="hero-panel-note">不经过云端 · 不上传第三方服务器</p>
+        </aside>
       </div>
 
       <div class="mode-grid">
         <button class="mode-card mode-send" id="btn-mode-send" type="button">
-          <span class="mode-glow"></span>
           <span class="mode-topline"><span class="mode-index">01</span><span class="mode-arrow">↗</span></span>
           <span class="mode-icon">
             <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
@@ -113,7 +93,6 @@
         </button>
 
         <button class="mode-card mode-receive" id="btn-mode-receive" type="button">
-          <span class="mode-glow"></span>
           <span class="mode-topline"><span class="mode-index">02</span><span class="mode-arrow">↙</span></span>
           <span class="mode-icon">
             <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
