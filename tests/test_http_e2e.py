@@ -84,6 +84,15 @@ class HttpEndToEndTests(unittest.TestCase):
         self.assertEqual(adaptation["renamed"], 0)
         self.assertIn("warnings", adaptation)
 
+        # The review state is intentionally "busy", but the native save-dir
+        # picker must still be allowed there. This is a regression guard for
+        # the macOS "receiver is busy" report.
+        receiver_app.pick = lambda kind: [str(destination)]
+        picked = http_json(f"{receiver_server.url}api/receive/choose-dir", "POST", {})
+        self.assertFalse(picked["canceled"])
+        self.assertEqual(picked["path"], str(destination))
+        self.assertTrue(self._state(receiver_server)["receive"]["can_start"])
+
         result = http_json(
             f"{receiver_server.url}api/receive/set-dir",
             "POST",

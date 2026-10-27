@@ -213,8 +213,11 @@ class FlashDropRequestHandler(BaseHTTPRequestHandler):
         if kind == "save-dir":
             if self.app.mode != "receive":
                 raise UserError("当前模式不匹配")
-            if self.app.receiver.busy:
-                raise UserError("接收端正在忙，暂时不能选择文件夹")
+            # "review" is deliberately reported as busy so mode switches and
+            # editing stay blocked, but it is exactly the stage in which the
+            # receiver must be able to choose its save directory.
+            if self.app.receiver.status != "review":
+                raise UserError("请先连接发送方并进入文件确认页面，再选择保存文件夹")
         else:
             if self.app.mode != "send":
                 raise UserError("当前模式不匹配")
