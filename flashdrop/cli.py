@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 import threading
 import webbrowser
 
@@ -11,6 +12,26 @@ from . import __version__
 from .app import FlashDropApp
 from .config import DEFAULT_UI_PORT
 from .web import FlashDropWebServer
+
+
+def _prepare_stdio() -> None:
+    """Keep the banner from crashing on non-UTF-8 Windows code pages.
+
+    A redirected stdout/stderr uses the ANSI code page (cp1252 on an English
+    Windows), which cannot encode Chinese. A real console already handles
+    Unicode, so only non-interactive streams switch to UTF-8.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if stream is None:
+            continue
+        try:
+            if stream.isatty():
+                stream.reconfigure(errors="replace")
+            else:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            # Captured or already-detached streams (tests, pythonw) are fine.
+            pass
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,6 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _prepare_stdio()
     args = build_parser().parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
